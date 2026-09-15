@@ -1,6 +1,10 @@
 export interface MediaAdmitOpts {
   avatar: boolean;
   speak: boolean;
+  joinUrl?: string;
+  threadId?: string;
+  tenantId?: string;
+  organizerId?: string;
 }
 
 export interface PlayCommand {

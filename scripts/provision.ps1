@@ -50,7 +50,11 @@ Next (one Entra app, one Teams manifest — talking assistant):
 5. Sideload deploy/teams-app/manifest.json (supportsCalling=true, supportsVideo=true).
    Replace {{APP_ID}} and {{BOT_ID}} with the same app id.
 
-6. npm install
+6. Media worker (attendees hear the bot only if this is up and CALLBACK_URI is public HTTPS):
+   dotnet run --project services/media-worker --urls http://127.0.0.1:7071
+   MEDIA_WORKER_URL=http://127.0.0.1:7071 in .env
+
+7. npm install
    npm run doctor
 
 mode=fixture-loopback means Teams attendees cannot hear the bot yet.

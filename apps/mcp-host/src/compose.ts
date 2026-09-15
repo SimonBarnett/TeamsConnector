@@ -1,5 +1,5 @@
 import { InMemoryStore, EnvelopeCipher } from "@teams-audio-join/store";
-import { Orchestrator, MemoryEventSink, WebhookEventSink, LoopbackMediaWorker, UnavailableMediaWorker } from "@teams-audio-join/orchestrator";
+import { Orchestrator, MemoryEventSink, WebhookEventSink, LoopbackMediaWorker, UnavailableMediaWorker, HttpMediaWorker } from "@teams-audio-join/orchestrator";
 import { FakeGraphClient, fixtureCatchup, GraphRestClient, ClientCredentialsTokenProvider } from "@teams-audio-join/graph";
 import { FixtureLlmClient, XaiLlmClient, type LlmClient } from "@teams-audio-join/summarizer";
 import { nowIso } from "@teams-audio-join/shared";
@@ -73,11 +73,13 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
     cfg.webhook ? [new WebhookEventSink(cfg.webhook.url, cfg.webhook.secret)] : [],
   );
 
-  // Production Graph without a worker must not pretend to talk (loopback is in-process only).
-  const mediaWorker =
-    !cfg.mediaEnabled || cfg.mode === "graph-notes-only"
-      ? new UnavailableMediaWorker()
-      : new LoopbackMediaWorker();
+  const mediaWorker = !cfg.mediaEnabled
+    ? new UnavailableMediaWorker()
+    : cfg.mediaWorkerUrl
+      ? new HttpMediaWorker(cfg.mediaWorkerUrl)
+      : cfg.mode === "graph-notes-only"
+        ? new UnavailableMediaWorker()
+        : new LoopbackMediaWorker();
 
   const orch = new Orchestrator({
     store,

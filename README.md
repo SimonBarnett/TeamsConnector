@@ -15,7 +15,7 @@ This repository implements build spec v1.2 plus OpenAPI 1.5.0 at `contracts/team
 - Encrypted transcript/artifact bodies. No WAV/PCM/Opus objects.
 - Separate Entra app from the chat-only Teams plugin. No `Calls.AccessMedia.All` on day-one install.
 
-`plane=auto` prefers the media plane whenever the worker is healthy. Set `MEDIA_WORKER_ENABLED=false` only to force notes-only.
+`plane=auto` prefers the media plane whenever the worker is healthy. Set `MEDIA_WORKER_URL` to the Windows worker (`dotnet run --project services/media-worker`) for Graph `createCall`. Unset URL = local loopback (not audible in Teams).
 
 ## Layout
 

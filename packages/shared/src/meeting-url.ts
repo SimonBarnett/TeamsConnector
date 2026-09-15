@@ -23,6 +23,19 @@ export function redactJoinUrl(raw: string, maxLength = 512): string {
   return out;
 }
 
+/** 19:meeting_…@thread.v2 from a (possibly redacted) join URL path. */
+export function threadIdFromJoinUrl(raw: string): string | undefined {
+  try {
+    const path = decodeURIComponent(new URL(raw).pathname);
+    const m = path.match(/meetup-join\/(19:[^/]+)/i);
+    if (!m?.[1]) return undefined;
+    const id = m[1];
+    return id.includes("@") ? id : `${id}@thread.v2`;
+  } catch {
+    return undefined;
+  }
+}
+
 export function isTeamsJoinUrl(value: string): boolean {
   try {
     const url = new URL(value);

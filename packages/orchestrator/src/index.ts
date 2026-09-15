@@ -9,6 +9,7 @@ export { MemoryEventSink, makeEvent, type EventSink } from "./events.ts";
 export { WebhookEventSink } from "./webhook.ts";
 export { classifyCaptions } from "./classify.ts";
 export { selectPlane } from "./plane.ts";
+export { HttpMediaWorker } from "./http-media-worker.ts";
 export { Metrics } from "./metrics.ts";
 export { matchEcho, tokenF1 } from "./echo.ts";
 export { announceText, EstimatedTts, estimateDurationMs } from "./tts.ts";

@@ -8,6 +8,7 @@ import {
   nowIso,
   ok,
   redactJoinUrl,
+  threadIdFromJoinUrl,
   speakBlockedReason,
   validateCancelSpeech,
   validateGetTranscript,
@@ -884,7 +885,16 @@ export class Orchestrator {
   }
 
   private async admitWithOneRejoin(session: SessionRecord) {
-    const opts = { avatar: session.avatar, speak: session.mode === "listen_speak" };
+    const opts = {
+      avatar: session.avatar,
+      speak: session.mode === "listen_speak",
+      joinUrl: session.meeting.joinUrlRedacted,
+      threadId: session.meeting.joinUrlRedacted
+        ? threadIdFromJoinUrl(session.meeting.joinUrlRedacted)
+        : undefined,
+      tenantId: session.tenantId,
+      organizerId: session.meeting.organizer?.id,
+    };
     try {
       return await this.mediaWorker.admit(session.sessionId, opts);
     } catch {

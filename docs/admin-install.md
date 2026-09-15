@@ -35,6 +35,19 @@ npm run doctor
    ```
 
 6. Sideload `deploy/teams-app/manifest.json` (`supportsCalling=true`, `supportsVideo=true`). Replace `{{APP_ID}}` / `{{BOT_ID}}`.
+
+7. **Media worker** (required for attendees to hear the bot):
+
+   ```powershell
+   $env:AZURE_TENANT_ID="..."
+   $env:AZURE_CLIENT_ID="..."
+   $env:AZURE_CLIENT_SECRET="..."
+   $env:CALLBACK_URI="https://<public-host>/callback"
+   $env:PUBLIC_BASE_URL="https://<public-host>"
+   dotnet run --project services/media-worker --urls http://127.0.0.1:7071
+   ```
+
+   In the Node `.env`: `MEDIA_WORKER_URL=http://127.0.0.1:7071`. Graph `createCall` needs a **public HTTPS** `CALLBACK_URI` (tunnel/ngrok). Localhost callbacks are rejected.
 7. User binds their work account. Store a recording/transcription acknowledgement before the first attach. Local law still applies.
 
 ## What `npm run doctor` means

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { locatorCount, meetingKey, redactJoinUrl } from "./meeting-url.ts";
+import { locatorCount, meetingKey, redactJoinUrl, threadIdFromJoinUrl } from "./meeting-url.ts";
 import { validateJoinMeeting } from "./validate.ts";
 import { ConnectorError } from "./errors.ts";
 
@@ -7,6 +7,14 @@ const JOIN =
   "https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc/0?context=%7B%7D&pwd=SECRET99";
 
 describe("meeting url", () => {
+  it("extracts the meeting thread id from a join URL", () => {
+    expect(
+      threadIdFromJoinUrl(
+        "https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc/0?pwd=SECRET99",
+      ),
+    ).toBe("19:meeting_abc@thread.v2");
+  });
+
   it("strips query parameters including pwd", () => {
     const redacted = redactJoinUrl(JOIN);
     expect(redacted).not.toContain("pwd=");
