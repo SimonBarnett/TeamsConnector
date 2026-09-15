@@ -6,6 +6,8 @@ export function capabilitiesFor(input: {
   plane: Plane;
   mode: Mode;
   stt: SttQuality;
+  avatar?: boolean;
+  videoSending?: boolean;
 }): Capabilities {
   const deaf =
     input.state === "listening_deaf" ||
@@ -19,7 +21,16 @@ export function capabilitiesFor(input: {
     input.plane === "media" &&
     input.mode === "listen_speak" &&
     input.state === "speaking_enabled";
-  return { canHear, canSpeak, stt: input.stt };
+  const admitted =
+    input.state === "listening" ||
+    input.state === "listening_deaf" ||
+    input.state === "speaking_enabled";
+  const canShowVideo =
+    input.plane === "media" &&
+    Boolean(input.avatar) &&
+    Boolean(input.videoSending) &&
+    admitted;
+  return { canHear, canSpeak, stt: input.stt, canShowVideo };
 }
 
 export function assertCapabilitiesInvariant(caps: Capabilities, state: SessionState, plane: Plane, mode: Mode): void {
@@ -28,5 +39,8 @@ export function assertCapabilitiesInvariant(caps: Capabilities, state: SessionSt
   }
   if ((plane === "transcript" || mode === "listen") && caps.canSpeak) {
     throw new Error("capabilities invariant: canSpeak must be false on transcript/listen");
+  }
+  if (plane === "transcript" && caps.canShowVideo) {
+    throw new Error("capabilities invariant: canShowVideo must be false on transcript");
   }
 }

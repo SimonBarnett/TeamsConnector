@@ -4,7 +4,7 @@ import { FakeGraphClient, fixtureCatchup } from "@teams-audio-join/graph";
 import { FixtureLlmClient } from "@teams-audio-join/summarizer";
 import { looksLikeAudioBlobName } from "@teams-audio-join/shared";
 import { MemoryEventSink } from "./events.ts";
-import { Orchestrator } from "./orchestrator.ts";
+import { LoopbackMediaWorker, Orchestrator } from "./orchestrator.ts";
 import { seedReadyTenant, testMeta } from "./seed.ts";
 
 const JOIN =
@@ -160,5 +160,138 @@ describe("Orchestrator", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.error.code).toBe("unauthenticated");
+  });
+
+  it("does not attach avatar on Track A when media is unavailable", async () => {
+    const { orch } = await harness();
+    const res = await orch.call(
+      "join_meeting",
+      { onlineMeetingId: "om-priority", mode: "listen", avatar: true },
+      testMeta(),
+    );
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(["plane_unavailable", "media_permission_denied"]).toContain(res.error.code);
+  });
+
+  it("sends a still avatar on the media plane without enabling speak", async () => {
+    const store = new InMemoryStore();
+    await seedReadyTenant(store, { trackB: true });
+    const events = new MemoryEventSink();
+    const orch = new Orchestrator({
+      store,
+      graph: new FakeGraphClient([fixtureCatchup()]),
+      events,
+      llm: new FixtureLlmClient({ summary: "x" }),
+      mediaWorker: new LoopbackMediaWorker(),
+    });
+    const joined = await orch.call(
+      "join_meeting",
+      { onlineMeetingId: "om-priority", mode: "listen", avatar: true, plane: "auto" },
+      testMeta(),
+    );
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) return;
+    const data = joined.data as {
+      plane: string;
+      mode: string;
+      sessionId: string;
+      capabilities: { canSpeak: boolean; canShowVideo: boolean };
+    };
+    expect(data.plane).toBe("media");
+    expect(data.mode).toBe("listen");
+    expect(data.capabilities.canSpeak).toBe(false);
+    expect(data.capabilities.canShowVideo).toBe(true);
+
+    const status = await orch.call("get_meeting_status", { sessionId: data.sessionId }, testMeta());
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+    const video = (status.data as { video?: { sending: boolean; source: string; width?: number } }).video;
+    expect(video?.sending).toBe(true);
+    expect(video?.source).toBe("still_avatar");
+    expect(video?.width).toBe(640);
+  });
+
+  async function speakHarness() {
+    const store = new InMemoryStore();
+    await seedReadyTenant(store, { trackB: true });
+    const events = new MemoryEventSink();
+    const worker = new LoopbackMediaWorker();
+    const orch = new Orchestrator({
+      store,
+      graph: new FakeGraphClient([fixtureCatchup()]),
+      events,
+      llm: new FixtureLlmClient({ summary: "x" }),
+      mediaWorker: worker,
+      speakCooldownMs: 0,
+    });
+    const joined = await orch.call(
+      "join_meeting",
+      { onlineMeetingId: "om-priority", mode: "listen_speak", plane: "auto" },
+      testMeta(),
+    );
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) throw new Error("join failed");
+    const data = joined.data as { sessionId: string; state: string; capabilities: { canSpeak: boolean } };
+    expect(data.state).toBe("speaking_enabled");
+    expect(data.capabilities.canSpeak).toBe(true);
+    return { orch, events, worker, sessionId: data.sessionId, store };
+  }
+
+  it("plays speak() on listen_speak media and records an assistant echo segment", async () => {
+    const { orch, sessionId, store } = await speakHarness();
+    const spoken = await orch.call(
+      "speak",
+      { sessionId, text: "I will capture the actions." },
+      testMeta(),
+    );
+    expect(spoken.ok).toBe(true);
+    if (!spoken.ok) return;
+    const data = spoken.data as { status: string; utteranceId: string };
+    expect(data.status).toBe("playing");
+    const segs = await store.listSegments(sessionId, 0, true, 50);
+    expect(segs.some((s) => s.speakerKind === "assistant" && s.linkedUtteranceId === data.utteranceId)).toBe(true);
+  });
+
+  it("rejects secrets and SSML, and caps a seventh utterance", async () => {
+    const { orch, sessionId } = await speakHarness();
+    const secret = await orch.call(
+      "speak",
+      { sessionId, text: "The token is Bearer abcdefghijklmnop" },
+      testMeta(),
+    );
+    expect(secret.ok).toBe(true);
+    if (!secret.ok) return;
+    expect((secret.data as { status: string; error?: { code: string } }).status).toBe("rejected");
+    expect((secret.data as { error?: { code: string } }).error?.code).toBe("content_filtered");
+
+    for (let i = 0; i < 6; i++) {
+      const r = await orch.call("speak", { sessionId, text: `Update number ${i} is done.` }, testMeta());
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect((r.data as { status: string }).status).toBe("playing");
+      await orch.call("cancel_speech", { sessionId }, testMeta());
+    }
+    const seventh = await orch.call("speak", { sessionId, text: "This should be capped." }, testMeta());
+    expect(seventh.ok).toBe(true);
+    if (!seventh.ok) return;
+    expect((seventh.data as { error?: { code: string } }).error?.code).toBe("speak_capped");
+  });
+
+  it("barges in on human speech within 400 ms and ejects with socket close under 2s", async () => {
+    const { orch, sessionId, events } = await speakHarness();
+    const spoken = await orch.call("speak", { sessionId, text: "Please hold while I read the actions." }, testMeta());
+    expect(spoken.ok).toBe(true);
+    const barge = await orch.handleHumanSpeech(sessionId, 300);
+    expect(barge.cancelled.length).toBe(1);
+    expect(barge.stopLatencyMs).toBeLessThanOrEqual(400);
+    expect(events.events.some((e) => e.type === "speak.finished")).toBe(true);
+
+    const eject = await orch.handleRemoteEnd(sessionId, "ejected");
+    expect(eject.closeLatencyMs).toBeLessThanOrEqual(2000);
+    const status = await orch.call("get_meeting_status", { sessionId }, testMeta());
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+    expect((status.data as { state: string }).state).toBe("ended");
   });
 });

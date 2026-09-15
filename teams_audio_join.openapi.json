@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Teams Agent Audio Join Connector API",
-    "version": "1.2.0",
-    "description": "Normative schemas for the Grok Bot Teams Agent Audio Join connector, including agent TTS and recognition of human, assistant-echo, and owner-command utterances."
+    "version": "1.3.0",
+    "description": "Normative schemas for the Grok Bot Teams Agent Audio Join connector, including agent TTS, recognition of human/assistant-echo/owner-command utterances, and an optional outbound still avatar on the camera tile."
   },
   "servers": [
     {
@@ -534,7 +534,8 @@
         "required": [
           "canHear",
           "canSpeak",
-          "stt"
+          "stt",
+          "canShowVideo"
         ],
         "properties": {
           "canHear": {
@@ -545,6 +546,10 @@
           },
           "stt": {
             "$ref": "#/components/schemas/SttQuality"
+          },
+          "canShowVideo": {
+            "type": "boolean",
+            "description": "True only when the assistant is sending outbound camera-tile video. Always false on the transcript plane. Never implies inbound video."
           }
         }
       },
@@ -813,6 +818,11 @@
             "minimum": 15,
             "maximum": 180,
             "default": 60
+          },
+          "avatar": {
+            "type": "boolean",
+            "default": false,
+            "description": "Send a synthetic still on the assistant camera tile. Requires the media plane. Does not subscribe to inbound video. Does not imply listen_speak."
           }
         },
         "oneOf": [
@@ -973,6 +983,37 @@
           },
           "speak": {
             "$ref": "#/components/schemas/SpeakQuota"
+          },
+          "video": {
+            "$ref": "#/components/schemas/VideoStatus"
+          }
+        }
+      },
+      "VideoStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sending",
+          "source"
+        ],
+        "properties": {
+          "sending": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "still_avatar",
+              "none"
+            ]
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       },

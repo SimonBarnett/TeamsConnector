@@ -11,3 +11,4 @@ export * from "./name-spotter.ts";
 export * from "./validate.ts";
 export * from "./tools.ts";
 export * from "./clock.ts";
+export * from "./content-filter.ts";

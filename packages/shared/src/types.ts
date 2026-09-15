@@ -55,6 +55,16 @@ export interface Capabilities {
   canHear: boolean;
   canSpeak: boolean;
   stt: SttQuality;
+  canShowVideo: boolean;
+}
+
+export type VideoSource = "still_avatar" | "none";
+
+export interface VideoStatus {
+  sending: boolean;
+  source: VideoSource;
+  width?: number;
+  height?: number;
 }
 
 export interface TranscriptSegment {
@@ -116,6 +126,7 @@ export interface JoinMeetingRequest {
   plane?: PlaneRequest;
   locale?: string;
   waitForAdmitSec?: number;
+  avatar?: boolean;
 }
 
 export interface JoinMeetingResponse {
@@ -145,6 +156,7 @@ export interface GetMeetingStatusResponse {
   capabilities: Capabilities;
   lastError?: ConnectorErrorBody;
   speak?: SpeakQuota;
+  video?: VideoStatus;
 }
 
 export interface GetTranscriptRequest {
@@ -234,10 +246,12 @@ export interface SessionRecord {
   locale?: string;
   announce: boolean;
   waitForAdmitSec: number;
+  avatar: boolean;
   capabilities: Capabilities;
   participants: Participant[];
   lastError?: ConnectorErrorBody;
   speak: SpeakQuota;
+  video?: VideoStatus;
   lastArtifactId?: string;
 }
 

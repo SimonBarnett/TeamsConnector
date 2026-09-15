@@ -29,4 +29,19 @@ describe("plane selection", () => {
       ),
     ).toBe("media");
   });
+
+  it("requires media for avatar=true and does not join transcript silently", () => {
+    expect(
+      selectPlane(
+        { mode: "listen", plane: "auto", avatar: true },
+        { mediaWorkerHealthy: true, trackBConsented: true },
+      ),
+    ).toBe("media");
+    expect(() =>
+      selectPlane(
+        { mode: "listen", plane: "transcript", avatar: true },
+        { mediaWorkerHealthy: false, trackBConsented: false },
+      ),
+    ).toThrow(ConnectorError);
+  });
 });

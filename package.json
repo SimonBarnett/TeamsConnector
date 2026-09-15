@@ -1,6 +1,6 @@
 {
   "name": "teams-audio-join-connector",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Grok Bot Teams Agent Audio Join connector — MCP tools for listen-first meeting notes.",
   "type": "module",

@@ -118,6 +118,7 @@ export function validateJoinMeeting(raw: unknown): JoinMeetingRequest {
     "plane",
     "locale",
     "waitForAdmitSec",
+    "avatar",
   ], "join_meeting");
   const req: JoinMeetingRequest = {
     mode: oneOf(obj, "mode", MODES),
@@ -128,6 +129,7 @@ export function validateJoinMeeting(raw: unknown): JoinMeetingRequest {
     plane: optOneOf(obj, "plane", PLANE_REQUESTS) ?? "auto",
     locale: optString(obj, "locale", 32),
     waitForAdmitSec: optInt(obj, "waitForAdmitSec", 15, 180) ?? 60,
+    avatar: optBool(obj, "avatar") ?? false,
   };
   if (req.meetingUrl) {
     try {

@@ -4,8 +4,9 @@ Exit criteria from the build spec:
 
 - [ ] .NET media bot joins a scheduled test meeting
 - [ ] Mixed audio streamed to STT in memory (ring buffer ≤ 10s)
-- [ ] No speak / TTS
+- [ ] No speak / TTS in the Phase 0 spike; Phase 2 adds policy-gated TTS on the same worker
 - [ ] No WAV/PCM/Opus persistence
+- [ ] Optional: send-only still avatar (no inbound video sockets)
 - [ ] 5 consecutive joins in the test tenant
 - [ ] Written go/no-go on admin-consent friction for `Calls.AccessMedia.All`
 

@@ -17,7 +17,8 @@ function session(id: string): SessionRecord {
     meetingKey: "om:abc",
     announce: false,
     waitForAdmitSec: 60,
-    capabilities: { canHear: true, canSpeak: false, stt: "official" },
+    avatar: false,
+    capabilities: { canHear: true, canSpeak: false, stt: "official", canShowVideo: false },
     participants: [],
     speak: { utterancesUsed: 0, utterancesMax: 6 },
   };

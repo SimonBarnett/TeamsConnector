@@ -36,6 +36,29 @@ Do **not** request on day one:
 
 See `docs/spike-track-b.md`. Requires Windows media workers, calling webhooks, and tenant opt-in for Calls media permissions. Lobby admit is mandatory. Organizer eject / `leave_meeting` must close media sockets within 2 seconds.
 
+Use `deploy/teams-app/manifest.track-b.json` for this path (`supportsCalling` and `supportsVideo` true). The Phase 1 sidecar stays `supportsVideo=false`.
+
+### Speak (Phase 2)
+
+`join_meeting({ mode: "listen_speak" })` then `speak({ text })`:
+
+- Plain text only, max 280 characters. No SSML.
+- Hard caps: 6 played utterances / session, 15 s cooldown after play start, queue depth 1.
+- Content filter rejects secrets, join URLs, SSML, and payment/PII templates (`content_filtered`).
+- Barge-in: ≥ 250 ms of human speech cancels a playing **normal** utterance; stop sending frames within 400 ms. `urgent` is not barged.
+- Organizer mute cancels TTS and sets `canSpeak=false`. Eject / `leave_meeting` closes media sockets within 2 s.
+- TTS echo is labelled `speakerKind=assistant` / `source=agent_tts_echo` and excluded from actions by default.
+
+### Camera-tile avatar
+
+`join_meeting({ avatar: true })` sends the bundled Haitch still (`deploy/avatars/haitch-360.png`) as **outbound** main video only:
+
+- 640×360 NV12 at 7.5 fps
+- No inbound video sockets, no VBSS, no `Subscribe` on participant cameras
+- Allowed with `mode=listen` (does not imply speak)
+- Fails with `media_permission_denied` / `plane_unavailable` if Track B is not available — it will not fake a tile on Track A
+
+
 ## Kill switch
 
 - User `leave_meeting` returns within 5s.

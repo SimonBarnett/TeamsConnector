@@ -4,6 +4,7 @@ import {
   spotAddress,
   type TranscriptSegment,
 } from "@teams-audio-join/shared";
+import { matchEcho, type PlayedUtterance } from "./echo.ts";
 
 export interface RawCaption {
   tMs: number;
@@ -18,24 +19,27 @@ export function classifyCaptions(
   seqStart: number,
   assistantDisplayName: string,
   wakePhrases: string[] = [],
+  played: PlayedUtterance[] = [],
 ): TranscriptSegment[] {
   const out: TranscriptSegment[] = [];
   let seq = seqStart;
   for (const row of rows) {
     const { text, redacted } = redactSecrets(row.text);
-    const assistant = isAssistantSpeaker(row.speaker, assistantDisplayName);
+    const echo = matchEcho(text, played);
+    const assistant = Boolean(echo) || isAssistantSpeaker(row.speaker, assistantDisplayName);
     const spot = assistant ? { addressed: false as const } : spotAddress(text, assistantDisplayName, wakePhrases);
     seq += 1;
     const seg: TranscriptSegment = {
       seq,
       tMs: row.tMs,
       endMs: Math.max(row.tMs, row.endMs),
-      speaker: row.speaker.slice(0, 128) || "Speaker 1",
+      speaker: assistant ? assistantDisplayName : row.speaker.slice(0, 128) || "Speaker 1",
       speakerKind: assistant ? "assistant" : "human",
       text,
       isPartial: row.isPartial ?? false,
       source: assistant ? "agent_tts_echo" : "teams_official",
     };
+    if (echo) seg.linkedUtteranceId = echo.utteranceId;
     if (spot.addressed) seg.addressedToAssistant = true;
     if (redacted) seg.redacted = true;
     out.push(seg);

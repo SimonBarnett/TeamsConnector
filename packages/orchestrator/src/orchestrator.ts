@@ -8,6 +8,7 @@ import {
   nowIso,
   ok,
   redactJoinUrl,
+  speakBlockedReason,
   validateCancelSpeech,
   validateGetTranscript,
   validateJoinMeeting,
@@ -26,29 +27,38 @@ import {
   type SessionRecord,
   type SpeakResponse,
   type Artifact,
+  type EndedReason,
+  type TranscriptSegment,
 } from "@teams-audio-join/shared";
 import type { ConnectorStore } from "@teams-audio-join/store";
 import type { GraphMeetingClient } from "@teams-audio-join/graph";
 import { parseTranscriptContent } from "@teams-audio-join/graph";
 import { summarise, type LlmClient } from "@teams-audio-join/summarizer";
 import { classifyCaptions } from "./classify.ts";
+import { matchEcho, type PlayedUtterance } from "./echo.ts";
 import { makeEvent, type EventSink } from "./events.ts";
+import { LoopbackMediaWorker, UnavailableMediaWorker, type MediaWorker } from "./media-loopback.ts";
 import { selectPlane } from "./plane.ts";
 import { assertJoinConsent, assertJoinQuota } from "./policy.ts";
+import { announceText, EstimatedTts, type TtsEngine } from "./tts.ts";
 
 const IDEMPOTENCY_TTL_MS = 10 * 60 * 1000;
 const SUMMARY_CACHE_MS = 15_000;
 const SUMMARY_MAX = 20;
 const TRANSCRIPT_FINALISE_MS = 30_000;
+const SPEAK_MAX = 6;
+const SPEAK_COOLDOWN_MS = 15_000;
+const BARGE_IN_MS = 250;
 
-export interface MediaWorker {
-  healthy(): Promise<boolean>;
-}
+export type { MediaWorker };
+export { LoopbackMediaWorker, UnavailableMediaWorker };
 
-export class UnavailableMediaWorker implements MediaWorker {
-  async healthy(): Promise<boolean> {
-    return false;
-  }
+interface SpeakRuntime {
+  used: number;
+  cooldownEndsAt: number;
+  playing?: { utteranceId: string; text: string; priority: "normal" | "urgent"; allowBargeIn: boolean };
+  queued?: { utteranceId: string; text: string; priority: "normal" | "urgent"; allowBargeIn: boolean; durationMs: number };
+  played: PlayedUtterance[];
 }
 
 export interface OrchestratorOptions {
@@ -57,8 +67,10 @@ export interface OrchestratorOptions {
   events: EventSink;
   llm: LlmClient;
   mediaWorker?: MediaWorker;
+  tts?: TtsEngine;
   assistantDisplayName?: string;
   wakePhrases?: string[];
+  speakCooldownMs?: number;
 }
 
 export class Orchestrator {
@@ -67,9 +79,12 @@ export class Orchestrator {
   private readonly events: EventSink;
   private readonly llm: LlmClient;
   private readonly mediaWorker: MediaWorker;
+  private readonly tts: TtsEngine;
   private readonly assistantDisplayName: string;
   private readonly wakePhrases: string[];
+  private readonly speakCooldownMs: number;
   private readonly summaryMeta = new Map<string, { count: number; lastAt: number; last?: Artifact }>();
+  private readonly speakRt = new Map<string, SpeakRuntime>();
 
   constructor(opts: OrchestratorOptions) {
     this.store = opts.store;
@@ -77,8 +92,10 @@ export class Orchestrator {
     this.events = opts.events;
     this.llm = opts.llm;
     this.mediaWorker = opts.mediaWorker ?? new UnavailableMediaWorker();
+    this.tts = opts.tts ?? new EstimatedTts();
     this.assistantDisplayName = opts.assistantDisplayName ?? "Haitch (audio assistant)";
     this.wakePhrases = opts.wakePhrases ?? [];
+    this.speakCooldownMs = opts.speakCooldownMs ?? SPEAK_COOLDOWN_MS;
   }
 
   async call(tool: string, args: unknown, rawMeta: unknown): Promise<Envelope<unknown>> {
@@ -176,7 +193,14 @@ export class Orchestrator {
       locale: req.locale,
       announce: Boolean(req.announce && req.mode === "listen_speak" && plane === "media"),
       waitForAdmitSec: req.waitForAdmitSec ?? 60,
-      capabilities: capabilitiesFor({ state: "joining", plane, mode: req.mode, stt: "none" }),
+      avatar: Boolean(req.avatar && plane === "media"),
+      capabilities: capabilitiesFor({
+        state: "joining",
+        plane,
+        mode: req.mode,
+        stt: "none",
+        avatar: Boolean(req.avatar && plane === "media"),
+      }),
       participants: [],
       speak: { utterancesUsed: 0, utterancesMax: 6 },
     };
@@ -204,6 +228,7 @@ export class Orchestrator {
     if (session.admittedAt) data.admittedAt = session.admittedAt;
     if (session.endedAt) data.endedAt = session.endedAt;
     if (session.lastError) data.lastError = session.lastError;
+    if (session.video) data.video = session.video;
     return ok(data, meta.requestId);
   }
 
@@ -235,16 +260,8 @@ export class Orchestrator {
     const req = validateSpeak(raw);
     const session = await this.requireSession(req.sessionId, meta);
     const utteranceId = newUtteranceId();
-    const allowed =
-      session.mode === "listen_speak" &&
-      session.plane === "media" &&
-      session.state === "speaking_enabled" &&
-      session.capabilities.canSpeak;
-    if (!allowed) {
-      const error = new ConnectorError(
-        "mode_unsupported",
-        "speak() is rejected when mode is listen or plane is transcript.",
-      ).toBody();
+    const reject = async (code: ConnectorError["code"], message: string, extra?: Record<string, unknown>) => {
+      const error = new ConnectorError(code, message, extra).toBody();
       await this.events.emit(
         makeEvent({
           type: "speak.rejected",
@@ -255,22 +272,90 @@ export class Orchestrator {
         }),
       );
       return ok(
-        {
-          utteranceId,
-          status: "rejected",
-          reason: "mode_unsupported",
-          error,
-        },
+        { utteranceId, status: "rejected" as const, reason: code, error },
         meta.requestId,
       );
+    };
+
+    const allowed =
+      session.mode === "listen_speak" &&
+      session.plane === "media" &&
+      session.state === "speaking_enabled" &&
+      session.capabilities.canSpeak;
+    if (!allowed) {
+      return reject("mode_unsupported", "speak() is rejected when mode is listen or plane is transcript.");
     }
-    return ok({ utteranceId, status: "queued" }, meta.requestId);
+
+    const blocked = speakBlockedReason(req.text);
+    if (blocked) {
+      return reject("content_filtered", blocked);
+    }
+
+    const rt = this.runtime(session.sessionId);
+    if (rt.used >= SPEAK_MAX) {
+      return reject("speak_capped", "Six played utterances per session.", { retryAfterMs: SPEAK_COOLDOWN_MS });
+    }
+    if (Date.now() < rt.cooldownEndsAt) {
+      return reject("speak_capped", "15s cooldown after play start.", {
+        retryAfterMs: Math.max(0, rt.cooldownEndsAt - Date.now()),
+      });
+    }
+
+    const { durationMs } = await this.tts.synthesize(req.text, req.voice ?? "assistant_default");
+    const priority = req.priority ?? "normal";
+    const allowBargeIn = req.allowBargeIn ?? true;
+
+    if (rt.playing && priority !== "urgent") {
+      return reject("speak_capped", "Queue depth is 1; wait for the current utterance.", {
+        retryAfterMs: durationMs,
+      });
+    }
+    if (rt.playing && priority === "urgent" && rt.playing.priority !== "urgent") {
+      await this.mediaWorker.cancel(session.sessionId);
+      rt.playing = undefined;
+    }
+    if (rt.playing?.priority === "urgent" && priority === "urgent") {
+      rt.queued = { utteranceId, text: req.text, priority, allowBargeIn, durationMs };
+      return ok({ utteranceId, status: "queued", estimatedDurationMs: durationMs }, meta.requestId);
+    }
+
+    try {
+      const played = await this.mediaWorker.play(session.sessionId, {
+        utteranceId,
+        text: req.text,
+        durationMs,
+        allowBargeIn,
+        priority,
+      });
+      if (played.status === "queued") {
+        rt.queued = { utteranceId, text: req.text, priority, allowBargeIn, durationMs };
+        return ok({ utteranceId, status: "queued", estimatedDurationMs: durationMs }, meta.requestId);
+      }
+    } catch {
+      return reject("speak_rejected", "Media worker refused the utterance.");
+    }
+
+    await this.markPlaying(session, utteranceId, req.text, priority, allowBargeIn, durationMs);
+    return ok({ utteranceId, status: "playing", estimatedDurationMs: durationMs }, meta.requestId);
   }
 
   async cancelSpeech(meta: CallMeta, raw: unknown): Promise<Envelope<CancelSpeechResponse>> {
     const req = validateCancelSpeech(raw);
-    await this.requireSession(req.sessionId, meta);
-    return ok({ cancelled: [], status: "nothing_playing" }, meta.requestId);
+    const session = await this.requireSession(req.sessionId, meta);
+    const result = await this.mediaWorker.cancel(session.sessionId, req.utteranceId);
+    const rt = this.runtime(session.sessionId);
+    if (result.cancelled.length) {
+      rt.playing = undefined;
+      rt.queued = undefined;
+      await this.emitSpeakFinished(session, result.cancelled[0]!, "cancelled", 0);
+    }
+    return ok(
+      {
+        cancelled: result.cancelled,
+        status: result.cancelled.length ? "cancelled" : "nothing_playing",
+      },
+      meta.requestId,
+    );
   }
 
   async requestSummary(meta: CallMeta, raw: unknown): Promise<Envelope<Artifact>> {
@@ -314,6 +399,7 @@ export class Orchestrator {
 
     session.state = "leaving";
     await this.store.putSession(session);
+    await this.mediaWorker.leave(session.sessionId);
 
     const segments = await this.store.listSegments(session.sessionId, 0, false, 500);
     const span =
@@ -336,11 +422,16 @@ export class Orchestrator {
     session.state = "ended";
     session.endedAt = nowIso();
     session.endedReason = req.reason === "error" ? "error" : "user_leave";
+    session.video = session.avatar
+      ? { sending: false, source: "none" }
+      : session.video;
     session.capabilities = capabilitiesFor({
       state: "ended",
       plane: session.plane,
       mode: session.mode,
       stt: session.capabilities.stt,
+      avatar: session.avatar,
+      videoSending: false,
     });
     await this.store.putSession(session);
     await this.audit(session, "leave", "ok");
@@ -366,14 +457,32 @@ export class Orchestrator {
   private async attachTranscript(session: SessionRecord): Promise<SessionRecord> {
     if (session.plane !== "transcript") {
       session.state = "in_lobby";
+      const admitted = await this.mediaWorker.admit(session.sessionId, {
+        avatar: session.avatar,
+        speak: session.mode === "listen_speak",
+      });
+      session.admittedAt = nowIso();
+      if (session.avatar && admitted.videoSending) {
+        session.video = { sending: true, source: "still_avatar", width: 640, height: 360 };
+      }
+      if (session.mode === "listen_speak") {
+        session.state = "speaking_enabled";
+      } else {
+        session.state = admitted.canHear ? "listening" : "listening_deaf";
+      }
       session.capabilities = capabilitiesFor({
-        state: "in_lobby",
+        state: session.state,
         plane: session.plane,
         mode: session.mode,
-        stt: "none",
+        stt: admitted.canHear ? "live" : "none",
+        avatar: session.avatar,
+        videoSending: session.video?.sending,
       });
       await this.store.putSession(session);
       await this.emitUpdated(session);
+      if (session.announce && session.state === "speaking_enabled") {
+        await this.playAnnounce(session);
+      }
       return session;
     }
 
@@ -418,6 +527,7 @@ export class Orchestrator {
       currentMax,
       this.assistantDisplayName,
       this.wakePhrases,
+      this.runtime(session.sessionId).played,
     );
     if (classified.length) {
       await this.store.appendSegments(session.sessionId, classified);
@@ -533,5 +643,159 @@ export class Orchestrator {
       expiresAt: Date.now() + IDEMPOTENCY_TTL_MS,
       resultJson: JSON.stringify(result),
     });
+  }
+
+  /** Graph/media callback: human speech ≥ 250 ms barges in on normal TTS. */
+  async handleHumanSpeech(sessionId: string, durationMs: number): Promise<{ cancelled: string[]; stopLatencyMs: number }> {
+    if (durationMs < BARGE_IN_MS) return { cancelled: [], stopLatencyMs: 0 };
+    const result = await this.mediaWorker.bargeIn(sessionId);
+    const rt = this.runtime(sessionId);
+    if (result.cancelled.length) {
+      rt.playing = undefined;
+      const session = await this.store.getSession(sessionId);
+      if (session) {
+        await this.emitSpeakFinished(session, result.cancelled[0]!, "cancelled", result.stopLatencyMs);
+      }
+    }
+    return result;
+  }
+
+  /** Organizer mute: cancel TTS, keep the session, canSpeak=false. */
+  async handleMuted(sessionId: string): Promise<void> {
+    const session = await this.store.getSession(sessionId);
+    if (!session) return;
+    await this.mediaWorker.mute(sessionId);
+    const rt = this.runtime(sessionId);
+    rt.playing = undefined;
+    rt.queued = undefined;
+    session.state = session.plane === "media" ? "listening" : session.state;
+    session.capabilities = capabilitiesFor({
+      state: session.state,
+      plane: session.plane,
+      mode: "listen",
+      stt: session.capabilities.stt,
+      avatar: session.avatar,
+      videoSending: session.video?.sending,
+    });
+    session.mode = "listen";
+    await this.store.putSession(session);
+    await this.emitUpdated(session);
+  }
+
+  /** Organizer eject or meeting ended. Closes media sockets then finalises. */
+  async handleRemoteEnd(sessionId: string, reason: Extract<EndedReason, "ejected" | "meeting_ended">): Promise<{ closeLatencyMs: number }> {
+    const left = await this.mediaWorker.leave(sessionId);
+    const session = await this.store.getSession(sessionId);
+    if (!session || session.state === "ended" || session.state === "failed") return left;
+    session.state = "ended";
+    session.endedAt = nowIso();
+    session.endedReason = reason;
+    session.capabilities = capabilitiesFor({
+      state: "ended",
+      plane: session.plane,
+      mode: session.mode,
+      stt: session.capabilities.stt,
+      avatar: session.avatar,
+      videoSending: false,
+    });
+    await this.store.putSession(session);
+    await this.events.emit(
+      makeEvent({
+        type: "session.ended",
+        tenantId: session.tenantId,
+        sessionId,
+        agentId: session.agentId,
+        payload: { reason },
+      }),
+    );
+    return left;
+  }
+
+  private runtime(sessionId: string): SpeakRuntime {
+    let rt = this.speakRt.get(sessionId);
+    if (!rt) {
+      rt = { used: 0, cooldownEndsAt: 0, played: [] };
+      this.speakRt.set(sessionId, rt);
+    }
+    return rt;
+  }
+
+  private async markPlaying(
+    session: SessionRecord,
+    utteranceId: string,
+    text: string,
+    priority: "normal" | "urgent",
+    allowBargeIn: boolean,
+    durationMs: number,
+  ): Promise<void> {
+    const rt = this.runtime(session.sessionId);
+    rt.playing = { utteranceId, text, priority, allowBargeIn };
+    rt.used += 1;
+    rt.cooldownEndsAt = Date.now() + this.speakCooldownMs;
+    rt.played.push({ utteranceId, text });
+    session.speak = {
+      utterancesUsed: rt.used,
+      utterancesMax: SPEAK_MAX,
+      cooldownEndsAt: new Date(rt.cooldownEndsAt).toISOString(),
+    };
+    await this.store.putSession(session);
+    await this.appendSyntheticEcho(session, utteranceId, text, durationMs);
+  }
+
+  private async playAnnounce(session: SessionRecord): Promise<void> {
+    const text = announceText(this.assistantDisplayName);
+    if (speakBlockedReason(text)) return;
+    const utteranceId = newUtteranceId();
+    const { durationMs } = await this.tts.synthesize(text, "assistant_brief");
+    try {
+      await this.mediaWorker.play(session.sessionId, {
+        utteranceId,
+        text,
+        durationMs,
+        allowBargeIn: true,
+        priority: "normal",
+      });
+      await this.markPlaying(session, utteranceId, text, "normal", true, durationMs);
+    } catch {
+      /* announce is best-effort */
+    }
+  }
+
+  private async emitSpeakFinished(
+    session: SessionRecord,
+    utteranceId: string,
+    status: "played" | "cancelled",
+    durationMs: number,
+  ): Promise<void> {
+    await this.events.emit(
+      makeEvent({
+        type: "speak.finished",
+        tenantId: session.tenantId,
+        sessionId: session.sessionId,
+        agentId: session.agentId,
+        payload: { utteranceId, status, durationMs },
+      }),
+    );
+  }
+
+  private async appendSyntheticEcho(
+    session: SessionRecord,
+    utteranceId: string,
+    text: string,
+    durationMs: number,
+  ): Promise<void> {
+    const seq = (await this.store.maxSeq(session.sessionId)) + 1;
+    const seg: TranscriptSegment = {
+      seq,
+      tMs: 0,
+      endMs: durationMs,
+      speaker: this.assistantDisplayName,
+      speakerKind: "assistant",
+      text,
+      isPartial: false,
+      source: "agent_tts_echo",
+      linkedUtteranceId: utteranceId,
+    };
+    await this.store.appendSegments(session.sessionId, [seg]);
   }
 }

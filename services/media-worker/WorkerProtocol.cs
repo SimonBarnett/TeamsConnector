@@ -1,15 +1,15 @@
 namespace TeamsAudioJoin.MediaWorker;
 
-public sealed record JoinCommand(string SessionId, string JoinUrlRedacted, string Locale);
+public sealed record JoinCommand(string SessionId, string JoinUrlRedacted, string Locale, bool Avatar = false);
 
 public sealed record LeaveCommand(string SessionId);
 
-public sealed record HealthStatus(bool Healthy, string Plane = "media");
+public sealed record HealthStatus(bool Healthy, string Plane = "media", bool VideoSending = false);
 
 /// <summary>
 /// Orchestrator ↔ worker contract for the Phase 0 spike.
 /// Join by URL is performed with Graph communications createCall on Windows.
-/// This assembly does not persist media and does not implement TTS.
+/// This assembly does not persist media. Phase 2 TTS is PCM-in-memory via TtsPcmPlayer.
 /// </summary>
 public interface IMediaWorker
 {

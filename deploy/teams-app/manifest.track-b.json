@@ -1,0 +1,37 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.3.0",
+  "id": "{{APP_ID}}",
+  "developer": {
+    "name": "Grok Bot",
+    "websiteUrl": "https://example.com",
+    "privacyUrl": "https://example.com/privacy",
+    "termsOfUseUrl": "https://example.com/terms"
+  },
+  "name": {
+    "short": "Haitch Audio",
+    "full": "Haitch (audio assistant)"
+  },
+  "description": {
+    "short": "Join Teams meetings as a visible assistant.",
+    "full": "Visible audio assistant that can join the media plane, show a synthetic still on its camera tile, take notes from live audio or official transcripts, and optionally speak. Never a hidden listener. Outbound avatar only — the bot does not receive participant video."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#5B2C6F",
+  "bots": [
+    {
+      "botId": "{{BOT_ID}}",
+      "scopes": ["personal", "team", "groupChat"],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "supportsCalling": true,
+      "supportsVideo": true
+    }
+  ],
+  "permissions": ["identity"],
+  "validDomains": []
+}

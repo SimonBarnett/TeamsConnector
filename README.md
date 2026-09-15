@@ -2,14 +2,15 @@
 
 MCP connector that lets a Grok Bot agent attach to a Microsoft Teams meeting, hear what was said (official Graph transcripts in v1), and return grounded notes. It does **not** speak unless Track B media join is enabled for the tenant.
 
-This repository implements build spec v1.2 and `contracts/teams_audio_join.openapi.json`.
+This repository implements build spec v1.2 plus OpenAPI 1.3.0 (outbound still avatar) at `contracts/teams_audio_join.openapi.json`.
 
 ## What v1 does
 
 - Track A (default): attach to the meeting’s official Graph transcript. No raw audio.
 - Seven MCP tools: `join_meeting`, `get_meeting_status`, `get_transcript`, `speak`, `cancel_speech`, `request_summary`, `leave_meeting`.
 - Honest deaf-state: `canHear=false` when transcription is off. Summaries never invent a meeting from the title.
-- `speak` exists on the surface and returns `mode_unsupported` on the transcript plane.
+- `speak` exists on the surface and returns `mode_unsupported` on the transcript plane. On Track B `listen_speak` it is policy-gated TTS (caps, cooldown, content filter, barge-in).
+- Optional camera-tile still (`join_meeting.avatar=true`) on Track B only: outbound NV12 loop, never inbound participant video.
 - Encrypted transcript/artifact bodies. No WAV/PCM/Opus objects.
 - Separate Entra app from the chat-only Teams plugin. No `Calls.AccessMedia.All` on day-one install.
 
@@ -26,7 +27,8 @@ packages/graph         Track A Graph adapter + VTT/JSON normaliser
 packages/summarizer    grounded xAI summaries
 apps/mcp-host          stdio + HTTP MCP server
 services/media-worker  .NET 8 Track B spike
-deploy/teams-app       Teams manifest (calling disabled)
+deploy/teams-app       Teams manifest (calling disabled; Track B overlay enables video)
+deploy/avatars         Haitch 640×360 camera-tile still
 docs/admin-install.md
 ```
 
