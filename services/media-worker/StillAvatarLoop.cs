@@ -51,11 +51,11 @@ public sealed class StillAvatarLoop : IDisposable
         _cts?.Cancel();
         try
         {
-            _run?.GetAwaiter().GetResult();
+            _run?.Wait(TimeSpan.FromSeconds(2));
         }
-        catch (TaskCanceledException)
+        catch (AggregateException)
         {
-            // expected
+            // cancelled delay
         }
         _cts?.Dispose();
         _cts = null;

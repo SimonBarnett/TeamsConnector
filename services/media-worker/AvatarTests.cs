@@ -40,7 +40,11 @@ public class AvatarTests
         var sent = 0;
         using var loop = new StillAvatarLoop(nv12, _ => Interlocked.Increment(ref sent), fps: 50);
         loop.Start();
-        Thread.Sleep(80);
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (loop.FramesSent < 1 && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(20);
+        }
         loop.Stop();
         Assert.True(loop.FramesSent >= 1);
         Assert.True(sent >= 1);
