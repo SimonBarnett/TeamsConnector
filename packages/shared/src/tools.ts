@@ -28,6 +28,22 @@ export const MCP_TOOLS = [
     name: "leave_meeting",
     description: "Leave the meeting immediately, revoke tokens, and finalise the summary artifact.",
   },
+  {
+    name: "upsert_standing_routine",
+    description: "Create or update a listen-only standing join routine (for example daily standup).",
+  },
+  {
+    name: "list_standing_routines",
+    description: "List standing listen-only join routines for the bound user.",
+  },
+  {
+    name: "delete_standing_routine",
+    description: "Delete a standing join routine.",
+  },
+  {
+    name: "prepare_hours_draft",
+    description: "Return a Hours-agent draft from a session artifact. Never posts time. Always requires human confirm.",
+  },
 ] as const;
 
 export type ToolName = (typeof MCP_TOOLS)[number]["name"];

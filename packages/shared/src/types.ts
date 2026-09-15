@@ -25,6 +25,7 @@ export interface CallMeta {
   requestId?: string;
   idempotencyKey?: string;
   meetingConfirmed?: boolean;
+  confirmStanding?: boolean;
 }
 
 export interface MeetingOrganizer {
@@ -95,6 +96,39 @@ export interface HoursHint {
   hours: number;
   label: string;
   billableSuggested: boolean;
+}
+
+export interface HoursDraft {
+  source: "teams-audio-join";
+  artifactId: string;
+  sessionId: string;
+  hours: number;
+  label: string;
+  requiresHumanConfirm: true;
+  billableSuggested: false;
+}
+
+export interface StandingMatch {
+  subjectContains?: string;
+  seriesMasterId?: string;
+  eventId?: string;
+  weekdays?: number[];
+  localTime?: string;
+}
+
+export interface StandingRoutine {
+  routineId: string;
+  tenantId: string;
+  userId: string;
+  label: string;
+  enabled: boolean;
+  mode: "listen";
+  plane: "auto" | "transcript";
+  avatar: boolean;
+  match: StandingMatch;
+  hoursDraft: boolean;
+  ownerMemo: boolean;
+  createdAt: string;
 }
 
 export interface Artifact {

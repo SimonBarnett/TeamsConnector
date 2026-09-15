@@ -2,7 +2,7 @@
 
 MCP connector that lets a Grok Bot agent attach to a Microsoft Teams meeting, hear what was said (official Graph transcripts in v1), and return grounded notes. It does **not** speak unless Track B media join is enabled for the tenant.
 
-This repository implements build spec v1.2 plus OpenAPI 1.3.0 (outbound still avatar) at `contracts/teams_audio_join.openapi.json`.
+This repository implements build spec v1.2 plus OpenAPI 1.4.0 (avatar, speak, standing listen, Hours draft) at `contracts/teams_audio_join.openapi.json`.
 
 ## What v1 does
 
@@ -11,6 +11,7 @@ This repository implements build spec v1.2 plus OpenAPI 1.3.0 (outbound still av
 - Honest deaf-state: `canHear=false` when transcription is off. Summaries never invent a meeting from the title.
 - `speak` exists on the surface and returns `mode_unsupported` on the transcript plane. On Track B `listen_speak` it is policy-gated TTS (caps, cooldown, content filter, barge-in).
 - Optional camera-tile still (`join_meeting.avatar=true`) on Track B only: outbound NV12 loop, never inbound participant video.
+- Phase 3: standing listen-only routines, Calendar trigger port, Hours draft (`requiresHumanConfirm: true`, never auto-posted), owner memo out of the Teams mix.
 - Encrypted transcript/artifact bodies. No WAV/PCM/Opus objects.
 - Separate Entra app from the chat-only Teams plugin. No `Calls.AccessMedia.All` on day-one install.
 
@@ -30,6 +31,8 @@ services/media-worker  .NET 8 Track B spike
 deploy/teams-app       Teams manifest (calling disabled; Track B overlay enables video)
 deploy/avatars         Haitch 640×360 camera-tile still
 docs/admin-install.md
+docs/workflows.md
+packages/workflows     Calendar trigger + Hours draft events
 ```
 
 ## Run locally

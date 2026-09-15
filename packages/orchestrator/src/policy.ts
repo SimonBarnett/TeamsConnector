@@ -1,4 +1,11 @@
-import { ConnectorError, meetingKey, type CallMeta, type JoinMeetingRequest } from "@teams-audio-join/shared";
+import {
+  ConnectorError,
+  findMatchingRoutine,
+  meetingKey,
+  type CallMeta,
+  type JoinMeetingRequest,
+  type MeetingRef,
+} from "@teams-audio-join/shared";
 import type { ConnectorStore } from "@teams-audio-join/store";
 
 const JOIN_WINDOW_MS = 10 * 60 * 1000;
@@ -16,12 +23,7 @@ export async function assertBound(store: ConnectorStore, meta: CallMeta): Promis
   }
 }
 
-export async function assertJoinConsent(
-  store: ConnectorStore,
-  meta: CallMeta,
-  req: JoinMeetingRequest,
-): Promise<void> {
-  await assertBound(store, meta);
+export async function assertAck(store: ConnectorStore, meta: CallMeta): Promise<void> {
   const ack = await store.getAck(meta.tenantId, meta.userId);
   if (!ack) {
     throw new ConnectorError(
@@ -29,11 +31,33 @@ export async function assertJoinConsent(
       "Recording/transcription acknowledgement is missing for this tenant user.",
     );
   }
+}
 
-  const key = meetingKey(req);
-  const standing = (await store.listStanding(meta.tenantId, meta.userId)).find((s) => s.meetingKey === key);
-  const standingOk = standing && (req.mode === "listen" || standing.mode === req.mode);
-  if (!standingOk && !meta.meetingConfirmed) {
+export async function assertJoinConsent(
+  store: ConnectorStore,
+  meta: CallMeta,
+  req: JoinMeetingRequest,
+  meeting?: MeetingRef,
+): Promise<void> {
+  await assertBound(store, meta);
+  await assertAck(store, meta);
+
+  if (meta.meetingConfirmed) return;
+  if (req.mode !== "listen") {
+    throw new ConnectorError(
+      "consent_required",
+      "Per-meeting confirmation is required unless a standing listen-only routine matches.",
+    );
+  }
+
+  const routines = await store.listRoutines(meta.tenantId, meta.userId);
+  const hit = findMatchingRoutine(routines, {
+    eventId: req.eventId ?? meeting?.eventId,
+    subject: meeting?.subject,
+    startAt: meeting?.startAt,
+    meetingKey: meetingKey(req),
+  });
+  if (!hit) {
     throw new ConnectorError(
       "consent_required",
       "Per-meeting confirmation is required unless a standing allow-list matches.",

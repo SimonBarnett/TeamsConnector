@@ -12,12 +12,18 @@ import {
   validateCancelSpeech,
   validateGetTranscript,
   validateJoinMeeting,
+  validateDeleteRoutine,
   validateLeave,
   validateMeta,
+  validatePrepareHoursDraft,
   validateRequestSummary,
   validateSpeak,
   validateStatus,
+  validateUpsertRoutine,
+  newRoutineId,
+  findMatchingRoutine,
   type CallMeta,
+  type HoursDraft,
   type CancelSpeechResponse,
   type Envelope,
   type GetMeetingStatusResponse,
@@ -33,13 +39,13 @@ import {
 import type { ConnectorStore } from "@teams-audio-join/store";
 import type { GraphMeetingClient } from "@teams-audio-join/graph";
 import { parseTranscriptContent } from "@teams-audio-join/graph";
-import { summarise, type LlmClient } from "@teams-audio-join/summarizer";
+import { hoursHintFor, summarise, type LlmClient } from "@teams-audio-join/summarizer";
 import { classifyCaptions } from "./classify.ts";
 import { matchEcho, type PlayedUtterance } from "./echo.ts";
 import { makeEvent, type EventSink } from "./events.ts";
 import { LoopbackMediaWorker, UnavailableMediaWorker, type MediaWorker } from "./media-loopback.ts";
 import { selectPlane } from "./plane.ts";
-import { assertJoinConsent, assertJoinQuota } from "./policy.ts";
+import { assertAck, assertBound, assertJoinConsent, assertJoinQuota } from "./policy.ts";
 import { announceText, EstimatedTts, type TtsEngine } from "./tts.ts";
 
 const IDEMPOTENCY_TTL_MS = 10 * 60 * 1000;
@@ -132,6 +138,18 @@ export class Orchestrator {
         case "leave_meeting":
           result = await this.leaveMeeting(meta, args);
           break;
+        case "upsert_standing_routine":
+          result = await this.upsertStandingRoutine(meta, args);
+          break;
+        case "list_standing_routines":
+          result = await this.listStandingRoutines(meta, args);
+          break;
+        case "delete_standing_routine":
+          result = await this.deleteStandingRoutine(meta, args);
+          break;
+        case "prepare_hours_draft":
+          result = await this.prepareHoursDraft(meta, args);
+          break;
         default:
           throw new ConnectorError("invalid_argument", `Unknown tool ${tool}`, { field: "name" });
       }
@@ -146,7 +164,8 @@ export class Orchestrator {
 
   async joinMeeting(meta: CallMeta, raw: unknown): Promise<Envelope<JoinMeetingResponse>> {
     const req = validateJoinMeeting(raw);
-    await assertJoinConsent(this.store, meta, req);
+    await assertBound(this.store, meta);
+    await assertAck(this.store, meta);
 
     const key = meetingKey(req);
     const existing = await this.store.findLiveByMeeting(meta.tenantId, meta.userId, key);
@@ -172,6 +191,7 @@ export class Orchestrator {
     if (!resolved) {
       throw new ConnectorError("meeting_not_found", "eventId/url/id did not resolve to an online meeting.");
     }
+    await assertJoinConsent(this.store, meta, req, resolved);
     if (resolved.joinUrlRedacted?.includes("?")) {
       resolved.joinUrlRedacted = redactJoinUrl(resolved.joinUrlRedacted);
     }
@@ -417,6 +437,7 @@ export class Orchestrator {
       await this.store.putArtifact(artifact);
       artifactId = artifact.artifactId;
       session.lastArtifactId = artifactId;
+      await this.emitWorkflowOnEnd(session, artifact);
     }
 
     session.state = "ended";
@@ -452,6 +473,71 @@ export class Orchestrator {
     };
     if (artifactId) data.artifactId = artifactId;
     return ok(data, meta.requestId);
+  }
+
+  async upsertStandingRoutine(meta: CallMeta, raw: unknown): Promise<Envelope<unknown>> {
+    await assertBound(this.store, meta);
+    await assertAck(this.store, meta);
+    if (!meta.confirmStanding && !meta.meetingConfirmed) {
+      throw new ConnectorError(
+        "consent_required",
+        "Creating a standing routine requires confirmStanding or meetingConfirmed.",
+      );
+    }
+    const body = validateUpsertRoutine(raw);
+    const routineId = body.routineId ?? newRoutineId();
+    if (body.routineId) {
+      const existing = await this.store.getRoutine(body.routineId);
+      if (existing && (existing.tenantId !== meta.tenantId || existing.userId !== meta.userId)) {
+        throw new ConnectorError("session_not_found", "Unknown routineId.");
+      }
+    }
+    const row = {
+      routineId,
+      tenantId: meta.tenantId,
+      userId: meta.userId,
+      label: body.label,
+      enabled: body.enabled,
+      mode: "listen" as const,
+      plane: body.plane,
+      avatar: body.avatar,
+      match: body.match,
+      hoursDraft: body.hoursDraft,
+      ownerMemo: body.ownerMemo,
+      createdAt: nowIso(),
+    };
+    await this.store.putRoutine(row);
+    return ok(row, meta.requestId);
+  }
+
+  async listStandingRoutines(meta: CallMeta, _raw: unknown): Promise<Envelope<unknown>> {
+    await assertBound(this.store, meta);
+    const routines = await this.store.listRoutines(meta.tenantId, meta.userId);
+    return ok({ routines }, meta.requestId);
+  }
+
+  async deleteStandingRoutine(meta: CallMeta, raw: unknown): Promise<Envelope<unknown>> {
+    await assertBound(this.store, meta);
+    const { routineId } = validateDeleteRoutine(raw);
+    const okDel = await this.store.deleteRoutine(meta.tenantId, meta.userId, routineId);
+    if (!okDel) throw new ConnectorError("session_not_found", "Unknown routineId.");
+    return ok({ deleted: true, routineId }, meta.requestId);
+  }
+
+  async prepareHoursDraft(meta: CallMeta, raw: unknown): Promise<Envelope<HoursDraft>> {
+    const { sessionId } = validatePrepareHoursDraft(raw);
+    const session = await this.requireSession(sessionId, meta);
+    const draft = await this.buildHoursDraft(session);
+    await this.events.emit(
+      makeEvent({
+        type: "hours.draft_ready",
+        tenantId: session.tenantId,
+        sessionId: session.sessionId,
+        agentId: session.agentId,
+        payload: { draft },
+      }),
+    );
+    return ok(draft, meta.requestId);
   }
 
   private async attachTranscript(session: SessionRecord): Promise<SessionRecord> {
@@ -776,6 +862,71 @@ export class Orchestrator {
         payload: { utteranceId, status, durationMs },
       }),
     );
+  }
+
+  private async emitWorkflowOnEnd(session: SessionRecord, artifact: Artifact): Promise<void> {
+    await this.events.emit(
+      makeEvent({
+        type: "artifact.ready",
+        tenantId: session.tenantId,
+        sessionId: session.sessionId,
+        agentId: session.agentId,
+        payload: { artifact },
+      }),
+    );
+    const routines = await this.store.listRoutines(session.tenantId, session.userId);
+    const hit = findMatchingRoutine(routines, {
+      eventId: session.meeting.eventId,
+      subject: session.meeting.subject,
+      startAt: session.meeting.startAt,
+    });
+    if (hit?.hoursDraft) {
+      try {
+        const draft = await this.buildHoursDraft({ ...session, lastArtifactId: artifact.artifactId });
+        await this.events.emit(
+          makeEvent({
+            type: "hours.draft_ready",
+            tenantId: session.tenantId,
+            sessionId: session.sessionId,
+            agentId: session.agentId,
+            payload: { draft },
+          }),
+        );
+      } catch {
+        /* no duration — skip rather than invent hours */
+      }
+    }
+    if (hit?.ownerMemo) {
+      await this.events.emit(
+        makeEvent({
+          type: "owner.memo",
+          tenantId: session.tenantId,
+          sessionId: session.sessionId,
+          agentId: session.agentId,
+          payload: { sessionId: session.sessionId, artifactId: artifact.artifactId, text: artifact.summary },
+        }),
+      );
+    }
+  }
+
+  private async buildHoursDraft(session: SessionRecord): Promise<HoursDraft> {
+    const ended = { ...session, state: "ended" as const, endedAt: session.endedAt ?? nowIso() };
+    const segments = await this.store.listSegments(session.sessionId, 0, false, 500);
+    const artifact = await summarise({ session: ended, segments, style: "hours", llm: this.llm });
+    await this.store.putArtifact(artifact);
+    const hint = artifact.hoursHint ?? hoursHintFor(ended);
+    if (!hint) {
+      throw new ConnectorError("invalid_argument", "No meeting duration to draft hours from. Do not invent hours from the title.");
+    }
+    return {
+      source: "teams-audio-join",
+      artifactId: artifact.artifactId,
+      sessionId: session.sessionId,
+      hours: hint.hours,
+      label: hint.label,
+      requiresHumanConfirm: true,
+      billableSuggested: false,
+    };
   }
 
   private async appendSyntheticEcho(

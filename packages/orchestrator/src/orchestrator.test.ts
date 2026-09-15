@@ -294,4 +294,48 @@ describe("Orchestrator", () => {
     if (!status.ok) return;
     expect((status.data as { state: string }).state).toBe("ended");
   });
+
+  it("allows listen join via standing routine without meetingConfirmed", async () => {
+    const { orch, events } = await harness();
+    const up = await orch.call(
+      "upsert_standing_routine",
+      { label: "Catchup", match: { eventId: "evt-priority" }, hoursDraft: true, ownerMemo: true },
+      testMeta({ confirmStanding: true }),
+    );
+    expect(up.ok).toBe(true);
+    const joined = await orch.call(
+      "join_meeting",
+      { eventId: "evt-priority", mode: "listen" },
+      testMeta({ meetingConfirmed: false }),
+    );
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) return;
+    const speakJoin = await orch.call(
+      "join_meeting",
+      { eventId: "evt-priority", mode: "listen_speak" },
+      testMeta({ meetingConfirmed: false }),
+    );
+    expect(speakJoin.ok).toBe(false);
+
+    const sessionId = (joined.data as { sessionId: string }).sessionId;
+    const left = await orch.call("leave_meeting", { sessionId }, testMeta());
+    expect(left.ok).toBe(true);
+    expect(events.events.some((e) => e.type === "artifact.ready")).toBe(true);
+    expect(events.events.some((e) => e.type === "hours.draft_ready")).toBe(true);
+    expect(events.events.some((e) => e.type === "owner.memo")).toBe(true);
+    const tx = await orch.call("get_transcript", { sessionId }, testMeta());
+    expect(tx.ok).toBe(true);
+    if (!tx.ok) return;
+    const segs = (tx.data as { segments: { source: string }[] }).segments;
+    expect(segs.every((s) => s.source !== "owner_command")).toBe(true);
+
+    const draft = await orch.call("prepare_hours_draft", { sessionId }, testMeta());
+    expect(draft.ok).toBe(true);
+    if (!draft.ok) return;
+    const body = draft.data as { requiresHumanConfirm: boolean; billableSuggested: boolean; hours: number; source: string };
+    expect(body.requiresHumanConfirm).toBe(true);
+    expect(body.billableSuggested).toBe(false);
+    expect(body.source).toBe("teams-audio-join");
+    expect(body.hours % 0.25).toBe(0);
+  });
 });

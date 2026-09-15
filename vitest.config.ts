@@ -11,6 +11,7 @@ export default defineConfig({
       "@teams-audio-join/orchestrator": `${root}packages/orchestrator/src/index.ts`,
       "@teams-audio-join/graph": `${root}packages/graph/src/index.ts`,
       "@teams-audio-join/summarizer": `${root}packages/summarizer/src/index.ts`,
+      "@teams-audio-join/workflows": `${root}packages/workflows/src/index.ts`,
     },
   },
   test: {

@@ -23,7 +23,7 @@ Display name default: `Haitch (audio assistant)`. It must be obviously non-human
 6. Sideload `deploy/teams-app/manifest.json` (`supportsCalling=false`, `supportsVideo=false`).
 7. User connects their work account to the connector.
 8. Before the first transcript attach, store a recording/transcription acknowledgement with timestamp. Treat join+transcribe as potential recording under local law.
-9. Per-meeting confirmation in the agent chat, unless a standing allow-list matches (listen-only routines).
+9. Per-meeting confirmation in the agent chat, unless a standing **listen-only** routine matches. Recording acknowledgement is still required. See `docs/workflows.md`.
 
 Do **not** request on day one:
 

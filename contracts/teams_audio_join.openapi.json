@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Teams Agent Audio Join Connector API",
-    "version": "1.3.0",
-    "description": "Normative schemas for the Grok Bot Teams Agent Audio Join connector, including agent TTS, recognition of human/assistant-echo/owner-command utterances, and an optional outbound still avatar on the camera tile."
+    "version": "1.4.0",
+    "description": "Normative schemas for the Grok Bot Teams Agent Audio Join connector, including agent TTS, recognition of human/assistant-echo/owner-command utterances, and an optional outbound still avatar on the camera tile. Phase 3 standing listen, Hours draft, and owner memo events."
   },
   "servers": [
     {
@@ -264,6 +264,126 @@
         "responses": {
           "202": {
             "description": "Accepted"
+          }
+        }
+      }
+    },
+    "/tools/upsert_standing_routine": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "operationId": "upsert_standing_routine",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/list_standing_routines": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "operationId": "list_standing_routines",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/delete_standing_routine": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "operationId": "delete_standing_routine",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/prepare_hours_draft": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "operationId": "prepare_hours_draft",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
           }
         }
       }
@@ -1363,7 +1483,11 @@
           "assistant.addressed",
           "speak.finished",
           "speak.rejected",
-          "session.ended"
+          "session.ended",
+          "artifact.ready",
+          "hours.draft_ready",
+          "owner.memo",
+          "routine.fired"
         ]
       },
       "EventEnvelope": {

@@ -8,7 +8,8 @@ import {
 } from "./enums.ts";
 import { isBcp47 } from "./locale.ts";
 import { locatorCount } from "./meeting-url.ts";
-import { ARTIFACT_ID_RE, IDEMPOTENCY_KEY_RE, isAgentId, SESSION_ID_RE, UTTERANCE_ID_RE } from "./ids.ts";
+import { ARTIFACT_ID_RE, IDEMPOTENCY_KEY_RE, isAgentId, ROUTINE_ID_RE, SESSION_ID_RE, UTTERANCE_ID_RE } from "./ids.ts";
+import { matchHasLocator } from "./standing.ts";
 import type {
   CallMeta,
   CancelSpeechRequest,
@@ -17,6 +18,8 @@ import type {
   LeaveMeetingRequest,
   RequestSummaryRequest,
   SpeakRequest,
+  StandingMatch,
+  StandingRoutine,
 } from "./types.ts";
 
 const UUID_RE =
@@ -88,7 +91,7 @@ function optOneOf<T extends string>(
 
 export function validateMeta(raw: unknown): CallMeta {
   const obj = asRecord(raw ?? {}, "meta");
-  unexpectedKeys(obj, ["tenantId", "userId", "agentId", "requestId", "idempotencyKey", "meetingConfirmed"], "meta");
+  unexpectedKeys(obj, ["tenantId", "userId", "agentId", "requestId", "idempotencyKey", "meetingConfirmed", "confirmStanding"], "meta");
   const tenantId = reqString(obj, "tenantId", 64);
   if (!UUID_RE.test(tenantId)) {
     throw new ConnectorError("invalid_argument", "tenantId must be a UUID", { field: "meta.tenantId" });
@@ -104,7 +107,8 @@ export function validateMeta(raw: unknown): CallMeta {
     throw new ConnectorError("invalid_argument", "idempotencyKey is invalid", { field: "meta.idempotencyKey" });
   }
   const meetingConfirmed = optBool(obj, "meetingConfirmed");
-  return { tenantId, userId, agentId, requestId, idempotencyKey, meetingConfirmed };
+  const confirmStanding = optBool(obj, "confirmStanding");
+  return { tenantId, userId, agentId, requestId, idempotencyKey, meetingConfirmed, confirmStanding };
 }
 
 export function validateJoinMeeting(raw: unknown): JoinMeetingRequest {
@@ -220,6 +224,72 @@ export function validateLeave(raw: unknown): LeaveMeetingRequest {
 export function validateStatus(raw: unknown): { sessionId: string } {
   const obj = asRecord(raw, "get_meeting_status");
   unexpectedKeys(obj, ["sessionId"], "get_meeting_status");
+  return { sessionId: validateSessionId(obj.sessionId) };
+}
+
+function validateMatch(raw: unknown): StandingMatch {
+  const obj = asRecord(raw, "match");
+  unexpectedKeys(obj, ["subjectContains", "seriesMasterId", "eventId", "weekdays", "localTime"], "match");
+  const match: StandingMatch = {
+    subjectContains: optString(obj, "subjectContains", 128),
+    seriesMasterId: optString(obj, "seriesMasterId", 256),
+    eventId: optString(obj, "eventId", 256),
+    localTime: optString(obj, "localTime", 5),
+  };
+  if (obj.weekdays !== undefined) {
+    if (!Array.isArray(obj.weekdays) || obj.weekdays.some((n) => typeof n !== "number" || n < 1 || n > 7 || !Number.isInteger(n))) {
+      throw new ConnectorError("invalid_argument", "weekdays must be integers 1–7 (Mon=1)", { field: "match.weekdays" });
+    }
+    match.weekdays = obj.weekdays as number[];
+  }
+  if (match.localTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(match.localTime)) {
+    throw new ConnectorError("invalid_argument", "localTime must be HH:MM", { field: "match.localTime" });
+  }
+  if (!matchHasLocator(match)) {
+    throw new ConnectorError("invalid_argument", "match needs subjectContains, seriesMasterId, or eventId", {
+      field: "match",
+    });
+  }
+  return match;
+}
+
+export function validateUpsertRoutine(raw: unknown): Omit<StandingRoutine, "tenantId" | "userId" | "createdAt" | "routineId"> & { routineId?: string } {
+  const obj = asRecord(raw, "upsert_standing_routine");
+  unexpectedKeys(obj, ["routineId", "label", "enabled", "mode", "plane", "avatar", "match", "hoursDraft", "ownerMemo"], "upsert_standing_routine");
+  const mode = optOneOf(obj, "mode", ["listen"] as const) ?? "listen";
+  if (obj.mode === "listen_speak") {
+    throw new ConnectorError("invalid_argument", "Standing routines are listen-only.", { field: "mode" });
+  }
+  const routineId = optString(obj, "routineId", 64);
+  if (routineId && !ROUTINE_ID_RE.test(routineId)) {
+    throw new ConnectorError("invalid_argument", "routineId is invalid", { field: "routineId" });
+  }
+  return {
+    routineId,
+    label: reqString(obj, "label", 80),
+    enabled: optBool(obj, "enabled") ?? true,
+    mode,
+    plane: optOneOf(obj, "plane", ["auto", "transcript"] as const) ?? "auto",
+    avatar: optBool(obj, "avatar") ?? false,
+    match: validateMatch(obj.match),
+    hoursDraft: optBool(obj, "hoursDraft") ?? true,
+    ownerMemo: optBool(obj, "ownerMemo") ?? false,
+  };
+}
+
+export function validateDeleteRoutine(raw: unknown): { routineId: string } {
+  const obj = asRecord(raw, "delete_standing_routine");
+  unexpectedKeys(obj, ["routineId"], "delete_standing_routine");
+  const routineId = reqString(obj, "routineId", 64);
+  if (!ROUTINE_ID_RE.test(routineId)) {
+    throw new ConnectorError("invalid_argument", "routineId is invalid", { field: "routineId" });
+  }
+  return { routineId };
+}
+
+export function validatePrepareHoursDraft(raw: unknown): { sessionId: string } {
+  const obj = asRecord(raw, "prepare_hours_draft");
+  unexpectedKeys(obj, ["sessionId"], "prepare_hours_draft");
   return { sessionId: validateSessionId(obj.sessionId) };
 }
 

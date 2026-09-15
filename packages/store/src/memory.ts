@@ -1,4 +1,4 @@
-import { LIVE_STATES, type Artifact, type SessionRecord, type TranscriptSegment } from "@teams-audio-join/shared";
+import { LIVE_STATES, type Artifact, type SessionRecord, type StandingRoutine, type TranscriptSegment } from "@teams-audio-join/shared";
 import { EnvelopeCipher } from "./crypto.ts";
 import type {
   AuditEvent,
@@ -6,7 +6,6 @@ import type {
   ConnectorStore,
   ConsentAck,
   IdempotencyRecord,
-  StandingAllow,
   TenantInstall,
 } from "./types.ts";
 
@@ -21,7 +20,7 @@ export class InMemoryStore implements ConnectorStore {
   private tenants = new Map<string, TenantInstall>();
   private connections = new Map<string, ConnectionRecord>();
   private acks = new Map<string, ConsentAck>();
-  private standing: StandingAllow[] = [];
+  private routines = new Map<string, StandingRoutine>();
   private sessions = new Map<string, SessionRecord>();
   private segments: EncryptedSegment[] = [];
   private artifacts = new Map<string, string>();
@@ -52,14 +51,20 @@ export class InMemoryStore implements ConnectorStore {
     this.acks.set(`${row.tenantId}:${row.userId}`, row);
   }
 
-  async listStanding(tenantId: string, userId: string) {
-    return this.standing.filter((s) => s.tenantId === tenantId && s.userId === userId);
+  async listRoutines(tenantId: string, userId: string) {
+    return [...this.routines.values()].filter((s) => s.tenantId === tenantId && s.userId === userId);
   }
-  async putStanding(row: StandingAllow) {
-    this.standing = this.standing.filter(
-      (s) => !(s.tenantId === row.tenantId && s.userId === row.userId && s.meetingKey === row.meetingKey),
-    );
-    this.standing.push(row);
+  async putRoutine(row: StandingRoutine) {
+    this.routines.set(row.routineId, structuredClone(row));
+  }
+  async getRoutine(routineId: string) {
+    return this.routines.get(routineId);
+  }
+  async deleteRoutine(tenantId: string, userId: string, routineId: string) {
+    const row = this.routines.get(routineId);
+    if (!row || row.tenantId !== tenantId || row.userId !== userId) return false;
+    this.routines.delete(routineId);
+    return true;
   }
 
   async getSession(sessionId: string) {

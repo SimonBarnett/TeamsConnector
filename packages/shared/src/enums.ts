@@ -77,6 +77,10 @@ export const EVENT_TYPES = [
   "speak.finished",
   "speak.rejected",
   "session.ended",
+  "artifact.ready",
+  "hours.draft_ready",
+  "owner.memo",
+  "routine.fired",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

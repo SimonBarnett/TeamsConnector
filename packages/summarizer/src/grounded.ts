@@ -97,8 +97,8 @@ export function parseModelJson(raw: string): Pick<Artifact, "summary" | "decisio
 }
 
 export function hoursHintFor(session: SessionRecord): Artifact["hoursHint"] | undefined {
-  const start = Date.parse(session.admittedAt ?? session.startedAt ?? session.createdAt);
-  const end = Date.parse(session.endedAt ?? nowIso());
+  const start = Date.parse(session.meeting.startAt ?? session.admittedAt ?? session.startedAt ?? session.createdAt);
+  const end = Date.parse(session.meeting.endAt ?? session.endedAt ?? nowIso());
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return undefined;
   const hoursRaw = (end - start) / 3_600_000;
   const hours = Math.min(12, Math.max(0.25, Math.round(hoursRaw * 4) / 4));

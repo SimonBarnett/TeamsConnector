@@ -18,7 +18,8 @@
       "@teams-audio-join/store": ["./packages/store/src/index.ts"],
       "@teams-audio-join/orchestrator": ["./packages/orchestrator/src/index.ts"],
       "@teams-audio-join/graph": ["./packages/graph/src/index.ts"],
-      "@teams-audio-join/summarizer": ["./packages/summarizer/src/index.ts"]
+      "@teams-audio-join/summarizer": ["./packages/summarizer/src/index.ts"],
+      "@teams-audio-join/workflows": ["./packages/workflows/src/index.ts"]
     }
   },
   "include": ["packages/**/*.ts", "apps/**/*.ts", "vitest.config.ts"],

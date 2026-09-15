@@ -5,6 +5,7 @@ const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 export const SESSION_ID_RE = /^ses_[0-9A-HJKMNP-TV-Z]{26}$/;
 export const UTTERANCE_ID_RE = /^utt_[0-9A-HJKMNP-TV-Z]{26}$/;
 export const ARTIFACT_ID_RE = /^art_[0-9A-HJKMNP-TV-Z]{26}$/;
+export const ROUTINE_ID_RE = /^rtn_[0-9A-HJKMNP-TV-Z]{26}$/;
 export const AGENT_ID_RE = /^[a-z0-9_-]{2,32}$/;
 export const IDEMPOTENCY_KEY_RE = /^[\x21-\x7E]{8,128}$/;
 
@@ -39,6 +40,14 @@ export function newUtteranceId(nowMs?: number): string {
 
 export function newArtifactId(nowMs?: number): string {
   return `art_${ulid(nowMs)}`;
+}
+
+export function newRoutineId(nowMs?: number): string {
+  return `rtn_${ulid(nowMs)}`;
+}
+
+export function isRoutineId(value: string): boolean {
+  return ROUTINE_ID_RE.test(value);
 }
 
 export function newEventId(nowMs?: number): string {

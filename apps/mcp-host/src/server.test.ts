@@ -20,6 +20,10 @@ describe("MCP host", () => {
       "cancel_speech",
       "request_summary",
       "leave_meeting",
+      "upsert_standing_routine",
+      "list_standing_routines",
+      "delete_standing_routine",
+      "prepare_hours_draft",
     ]);
 
     const call = (await handleRpc(orch, {

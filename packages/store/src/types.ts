@@ -2,6 +2,7 @@ import type {
   Artifact,
   CallMeta,
   SessionRecord,
+  StandingRoutine,
   TranscriptSegment,
 } from "@teams-audio-join/shared";
 
@@ -26,12 +27,7 @@ export interface ConsentAck {
   acknowledgedAt: string;
 }
 
-export interface StandingAllow {
-  tenantId: string;
-  userId: string;
-  meetingKey: string;
-  mode: "listen" | "listen_speak";
-}
+export type { StandingRoutine };
 
 export interface AuditEvent {
   ts: string;
@@ -65,8 +61,10 @@ export interface ConnectorStore {
   getAck(tenantId: string, userId: string): Promise<ConsentAck | undefined>;
   putAck(row: ConsentAck): Promise<void>;
 
-  listStanding(tenantId: string, userId: string): Promise<StandingAllow[]>;
-  putStanding(row: StandingAllow): Promise<void>;
+  listRoutines(tenantId: string, userId: string): Promise<StandingRoutine[]>;
+  putRoutine(row: StandingRoutine): Promise<void>;
+  getRoutine(routineId: string): Promise<StandingRoutine | undefined>;
+  deleteRoutine(tenantId: string, userId: string, routineId: string): Promise<boolean>;
 
   getSession(sessionId: string): Promise<SessionRecord | undefined>;
   putSession(row: SessionRecord): Promise<void>;
