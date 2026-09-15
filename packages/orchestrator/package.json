@@ -1,0 +1,21 @@
+{
+  "name": "@teams-audio-join/orchestrator",
+  "version": "1.2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@teams-audio-join/shared": "1.2.0",
+    "@teams-audio-join/store": "1.2.0",
+    "@teams-audio-join/graph": "1.2.0",
+    "@teams-audio-join/summarizer": "1.2.0"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "paths": {
+      "@teams-audio-join/shared": ["./packages/shared/src/index.ts"],
+      "@teams-audio-join/store": ["./packages/store/src/index.ts"],
+      "@teams-audio-join/orchestrator": ["./packages/orchestrator/src/index.ts"],
+      "@teams-audio-join/graph": ["./packages/graph/src/index.ts"],
+      "@teams-audio-join/summarizer": ["./packages/summarizer/src/index.ts"]
+    }
+  },
+  "include": ["packages/**/*.ts", "apps/**/*.ts", "vitest.config.ts"],
+  "exclude": ["**/*.test.ts", "**/dist/**"]
+}

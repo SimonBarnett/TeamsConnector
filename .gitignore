@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.local
+*.log
+.turbo/
+.idea/
+.vscode/
+*.tsbuildinfo
+services/media-worker/bin/
+services/media-worker/obj/
+.DS_Store
+Thumbs.db

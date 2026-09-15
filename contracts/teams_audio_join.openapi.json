@@ -1,0 +1,1503 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Teams Agent Audio Join Connector API",
+    "version": "1.2.0",
+    "description": "Normative schemas for the Grok Bot Teams Agent Audio Join connector, including agent TTS and recognition of human, assistant-echo, and owner-command utterances."
+  },
+  "servers": [
+    {
+      "url": "mcp://teams-audio-join",
+      "description": "MCP tool host (not an HTTP origin)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "tools",
+      "description": "Agent-visible MCP tools"
+    },
+    {
+      "name": "events",
+      "description": "Push events"
+    }
+  ],
+  "paths": {
+    "/tools/join_meeting": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "operationId": "join_meeting",
+        "summary": "Join or attach to a Microsoft Teams meeting",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinMeetingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Envelope with JoinMeetingResponse data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinMeetingSuccess"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FailureEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/get_meeting_status": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "operationId": "get_meeting_status",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMeetingStatusSuccess"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/get_transcript": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "operationId": "get_transcript",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetTranscriptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Transcript page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetTranscriptSuccess"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/cancel_speech": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "operationId": "cancel_speech",
+        "summary": "Stop the current or queued assistant utterance",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelSpeechRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cancel result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelSpeechSuccess"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/speak": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "operationId": "speak",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeakRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Utterance accepted or rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeakSuccess"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/request_summary": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "operationId": "request_summary",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestSummaryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Artifact",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestSummarySuccess"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tools/leave_meeting": {
+      "post": {
+        "tags": [
+          "tools"
+        ],
+        "operationId": "leave_meeting",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LeaveMeetingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Left",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeaveMeetingSuccess"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events": {
+      "post": {
+        "tags": [
+          "events"
+        ],
+        "operationId": "receiveEvent",
+        "summary": "Optional tenant webhook for connector events",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventEnvelope"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "unauthenticated",
+          "consent_required",
+          "policy_denied",
+          "meeting_not_found",
+          "lobby_timeout",
+          "media_permission_denied",
+          "plane_unavailable",
+          "mode_unsupported",
+          "session_not_found",
+          "speak_rejected",
+          "speak_capped",
+          "content_filtered",
+          "stt_degraded",
+          "dependency_unavailable",
+          "invalid_argument",
+          "conflict",
+          "rate_limited"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "message",
+          "retryable"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "FailureEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "error"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": false
+          },
+          "error": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "requestId": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      },
+      "SessionState": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "resolving",
+          "awaiting_consent",
+          "joining",
+          "in_lobby",
+          "listening",
+          "listening_deaf",
+          "speaking_enabled",
+          "leaving",
+          "ended",
+          "failed"
+        ]
+      },
+      "Plane": {
+        "type": "string",
+        "enum": [
+          "transcript",
+          "media"
+        ]
+      },
+      "PlaneRequest": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "transcript",
+          "media"
+        ]
+      },
+      "Mode": {
+        "type": "string",
+        "enum": [
+          "listen",
+          "listen_speak"
+        ]
+      },
+      "SttQuality": {
+        "type": "string",
+        "enum": [
+          "live",
+          "official",
+          "degraded",
+          "none"
+        ]
+      },
+      "ParticipantRole": {
+        "type": "string",
+        "enum": [
+          "organizer",
+          "presenter",
+          "attendee",
+          "assistant",
+          "guest",
+          "unknown"
+        ]
+      },
+      "SpeakPriority": {
+        "type": "string",
+        "enum": [
+          "normal",
+          "urgent"
+        ]
+      },
+      "SpeakStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "playing",
+          "played",
+          "cancelled",
+          "rejected"
+        ]
+      },
+      "SummaryStyle": {
+        "type": "string",
+        "enum": [
+          "bullets",
+          "memo",
+          "hours"
+        ]
+      },
+      "LeaveStatus": {
+        "type": "string",
+        "enum": [
+          "left",
+          "already_ended"
+        ]
+      },
+      "EndedReason": {
+        "type": "string",
+        "enum": [
+          "user_leave",
+          "meeting_ended",
+          "ejected",
+          "lobby_timeout",
+          "error"
+        ]
+      },
+      "SessionId": {
+        "type": "string",
+        "pattern": "^ses_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "UtteranceId": {
+        "type": "string",
+        "pattern": "^utt_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "ArtifactId": {
+        "type": "string",
+        "pattern": "^art_[0-9A-HJKMNP-TV-Z]{26}$"
+      },
+      "MeetingRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "onlineMeetingId": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "eventId": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "subject": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "startAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "joinUrlRedacted": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "organizer": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "displayName": {
+                "type": "string",
+                "maxLength": 128
+              }
+            }
+          }
+        }
+      },
+      "Participant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "displayName",
+          "inMeeting"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "role": {
+            "$ref": "#/components/schemas/ParticipantRole"
+          },
+          "inMeeting": {
+            "type": "boolean"
+          },
+          "isAssistant": {
+            "type": "boolean"
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Capabilities": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "canHear",
+          "canSpeak",
+          "stt"
+        ],
+        "properties": {
+          "canHear": {
+            "type": "boolean"
+          },
+          "canSpeak": {
+            "type": "boolean"
+          },
+          "stt": {
+            "$ref": "#/components/schemas/SttQuality"
+          }
+        }
+      },
+      "SpeakerKind": {
+        "type": "string",
+        "enum": [
+          "human",
+          "assistant",
+          "unknown"
+        ]
+      },
+      "SegmentSource": {
+        "type": "string",
+        "enum": [
+          "stt_live",
+          "stt_final",
+          "teams_official",
+          "agent_tts_echo",
+          "owner_command"
+        ]
+      },
+      "TranscriptSegment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "seq",
+          "tMs",
+          "endMs",
+          "speaker",
+          "speakerKind",
+          "text",
+          "isPartial",
+          "source"
+        ],
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "tMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "endMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "speaker": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "speakerId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "speakerKind": {
+            "$ref": "#/components/schemas/SpeakerKind"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "isPartial": {
+            "type": "boolean"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "source": {
+            "$ref": "#/components/schemas/SegmentSource"
+          },
+          "addressedToAssistant": {
+            "type": "boolean",
+            "default": false
+          },
+          "linkedUtteranceId": {
+            "$ref": "#/components/schemas/UtteranceId"
+          },
+          "redacted": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "ActionItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "confidence"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "owner": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "ownerId": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "due": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "HoursHint": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "hours",
+          "label",
+          "billableSuggested"
+        ],
+        "properties": {
+          "hours": {
+            "type": "number",
+            "minimum": 0.25,
+            "maximum": 12,
+            "multipleOf": 0.25
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "billableSuggested": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Artifact": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifactId",
+          "sessionId",
+          "style",
+          "partial",
+          "createdAt",
+          "summary",
+          "decisions",
+          "actions",
+          "openQuestions",
+          "groundedSeqRange"
+        ],
+        "properties": {
+          "artifactId": {
+            "$ref": "#/components/schemas/ArtifactId"
+          },
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "style": {
+            "$ref": "#/components/schemas/SummaryStyle"
+          },
+          "partial": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000
+          },
+          "decisions": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "actions": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/ActionItem"
+            }
+          },
+          "openQuestions": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 400
+            }
+          },
+          "hoursHint": {
+            "$ref": "#/components/schemas/HoursHint"
+          },
+          "groundedSeqRange": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "from",
+              "to"
+            ],
+            "properties": {
+              "from": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "to": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      },
+      "JoinMeetingRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mode"
+        ],
+        "properties": {
+          "meetingUrl": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "eventId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "onlineMeetingId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "announce": {
+            "type": "boolean",
+            "default": false
+          },
+          "plane": {
+            "$ref": "#/components/schemas/PlaneRequest",
+            "default": "auto"
+          },
+          "locale": {
+            "type": "string",
+            "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+          },
+          "waitForAdmitSec": {
+            "type": "integer",
+            "minimum": 15,
+            "maximum": 180,
+            "default": 60
+          }
+        },
+        "oneOf": [
+          {
+            "required": [
+              "meetingUrl"
+            ]
+          },
+          {
+            "required": [
+              "eventId"
+            ]
+          },
+          {
+            "required": [
+              "onlineMeetingId"
+            ]
+          }
+        ]
+      },
+      "JoinMeetingResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId",
+          "state",
+          "plane",
+          "mode",
+          "createdAt",
+          "meeting",
+          "capabilities"
+        ],
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "state": {
+            "$ref": "#/components/schemas/SessionState"
+          },
+          "plane": {
+            "$ref": "#/components/schemas/Plane"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resumed": {
+            "type": "boolean"
+          },
+          "meeting": {
+            "$ref": "#/components/schemas/MeetingRef"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/Capabilities"
+          }
+        }
+      },
+      "JoinMeetingSuccess": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/JoinMeetingResponse"
+          }
+        }
+      },
+      "SessionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId"
+        ],
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          }
+        }
+      },
+      "SpeakQuota": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "utterancesUsed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "utterancesMax": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "cooldownEndsAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "GetMeetingStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId",
+          "state",
+          "plane",
+          "mode",
+          "participants",
+          "capabilities"
+        ],
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "state": {
+            "$ref": "#/components/schemas/SessionState"
+          },
+          "plane": {
+            "$ref": "#/components/schemas/Plane"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "admittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "participants": {
+            "type": "array",
+            "maxItems": 250,
+            "items": {
+              "$ref": "#/components/schemas/Participant"
+            }
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/Capabilities"
+          },
+          "lastError": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "speak": {
+            "$ref": "#/components/schemas/SpeakQuota"
+          }
+        }
+      },
+      "GetMeetingStatusSuccess": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GetMeetingStatusResponse"
+          }
+        }
+      },
+      "GetTranscriptRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId"
+        ],
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "sinceSeq": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 200
+          },
+          "includePartials": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "GetTranscriptResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId",
+          "segments",
+          "nextSeq",
+          "ended",
+          "canHear"
+        ],
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TranscriptSegment"
+            }
+          },
+          "nextSeq": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ended": {
+            "type": "boolean"
+          },
+          "canHear": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GetTranscriptSuccess": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GetTranscriptResponse"
+          }
+        }
+      },
+      "SpeakRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId",
+          "text"
+        ],
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 280
+          },
+          "priority": {
+            "$ref": "#/components/schemas/SpeakPriority",
+            "default": "normal"
+          },
+          "voice": {
+            "type": "string",
+            "enum": [
+              "assistant_default",
+              "assistant_low",
+              "assistant_brief"
+            ],
+            "default": "assistant_default"
+          },
+          "allowBargeIn": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      },
+      "SpeakResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "utteranceId",
+          "status"
+        ],
+        "properties": {
+          "utteranceId": {
+            "$ref": "#/components/schemas/UtteranceId"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "playing",
+              "rejected"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "estimatedDurationMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "error": {
+            "$ref": "#/components/schemas/Error"
+          }
+        }
+      },
+      "SpeakSuccess": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SpeakResponse"
+          }
+        }
+      },
+      "RequestSummaryRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId"
+        ],
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "style": {
+            "$ref": "#/components/schemas/SummaryStyle",
+            "default": "bullets"
+          },
+          "refresh": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "RequestSummarySuccess": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Artifact"
+          }
+        }
+      },
+      "CancelSpeechRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId"
+        ],
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "utteranceId": {
+            "$ref": "#/components/schemas/UtteranceId"
+          }
+        }
+      },
+      "CancelSpeechResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cancelled",
+          "status"
+        ],
+        "properties": {
+          "cancelled": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UtteranceId"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "cancelled",
+              "nothing_playing"
+            ]
+          }
+        }
+      },
+      "CancelSpeechSuccess": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CancelSpeechResponse"
+          }
+        }
+      },
+      "LeaveMeetingRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId"
+        ],
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "user_leave",
+              "error"
+            ],
+            "default": "user_leave"
+          }
+        }
+      },
+      "LeaveMeetingResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId",
+          "status",
+          "endedAt"
+        ],
+        "properties": {
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LeaveStatus"
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "artifactId": {
+            "$ref": "#/components/schemas/ArtifactId"
+          }
+        }
+      },
+      "LeaveMeetingSuccess": {
+        "type": "object",
+        "required": [
+          "ok",
+          "data"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LeaveMeetingResponse"
+          }
+        }
+      },
+      "EventType": {
+        "type": "string",
+        "enum": [
+          "session.updated",
+          "participant.joined",
+          "participant.left",
+          "transcript.delta",
+          "assistant.addressed",
+          "speak.finished",
+          "speak.rejected",
+          "session.ended"
+        ]
+      },
+      "EventEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "type",
+          "occurredAt",
+          "tenantId",
+          "sessionId",
+          "payload"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/EventType"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tenantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "$ref": "#/components/schemas/SessionId"
+          },
+          "agentId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object"
+          }
+        }
+      },
+      "SessionUpdatedPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "plane",
+          "mode",
+          "capabilities"
+        ],
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/SessionState"
+          },
+          "plane": {
+            "$ref": "#/components/schemas/Plane"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/Mode"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/Capabilities"
+          },
+          "lastError": {
+            "$ref": "#/components/schemas/Error"
+          }
+        }
+      },
+      "ParticipantEventPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "participant"
+        ],
+        "properties": {
+          "participant": {
+            "$ref": "#/components/schemas/Participant"
+          }
+        }
+      },
+      "TranscriptDeltaPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "segments"
+        ],
+        "properties": {
+          "segments": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/TranscriptSegment"
+            }
+          }
+        }
+      },
+      "SpeakFinishedPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "utteranceId",
+          "status",
+          "durationMs"
+        ],
+        "properties": {
+          "utteranceId": {
+            "$ref": "#/components/schemas/UtteranceId"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "played",
+              "cancelled"
+            ]
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "SpeakRejectedPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "utteranceId",
+          "error"
+        ],
+        "properties": {
+          "utteranceId": {
+            "$ref": "#/components/schemas/UtteranceId"
+          },
+          "error": {
+            "$ref": "#/components/schemas/Error"
+          }
+        }
+      },
+      "SessionEndedPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/EndedReason"
+          },
+          "artifactId": {
+            "$ref": "#/components/schemas/ArtifactId"
+          },
+          "lastError": {
+            "$ref": "#/components/schemas/Error"
+          }
+        }
+      },
+      "AssistantAddressedPayload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "segment",
+          "trigger"
+        ],
+        "properties": {
+          "segment": {
+            "$ref": "#/components/schemas/TranscriptSegment"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "name",
+              "owner_ping",
+              "wake_phrase"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

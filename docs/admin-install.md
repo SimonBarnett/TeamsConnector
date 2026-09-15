@@ -1,0 +1,55 @@
+# Admin install — Teams Agent Audio Join Connector
+
+This connector is a **different Entra app** from the chat-only Teams plugin. Do not add `Calls.*` permissions to the chat app.
+
+Display name default: `Haitch (audio assistant)`. It must be obviously non-human.
+
+## Phase 1 (Track A — official transcripts)
+
+1. Register `teams-audio-join-connector` in Entra ID.
+2. Create a client secret or certificate. Store it in the platform secret store, never in agent chat.
+3. Application permissions (admin consent):
+   - `OnlineMeetings.Read.All`
+   - `OnlineMeetingTranscript.Read.All`
+4. Prefer resource-specific consent when the assistant is added to a specific meeting chat:
+   - `OnlineMeetingTranscript.Read.Chat`
+5. **Application access policy.** App-only `OnlineMeetings.Read.All` does not work tenant-wide without a policy granted to the connecting user or a service mailbox. Example:
+
+   ```powershell
+   New-CsApplicationAccessPolicy -Identity "teams-audio-join-policy" -AppIds "<APP_ID>"
+   Grant-CsApplicationAccessPolicy -PolicyName "teams-audio-join-policy" -Identity "<USER_OBJECT_ID>"
+   ```
+
+6. Sideload `deploy/teams-app/manifest.json` (`supportsCalling=false`, `supportsVideo=false`).
+7. User connects their work account to the connector.
+8. Before the first transcript attach, store a recording/transcription acknowledgement with timestamp. Treat join+transcribe as potential recording under local law.
+9. Per-meeting confirmation in the agent chat, unless a standing allow-list matches (listen-only routines).
+
+Do **not** request on day one:
+
+- `Calls.JoinGroupCall.All`
+- `Calls.JoinGroupCallAsGuest.All`
+- `Calls.AccessMedia.All`
+- `Calls.Initiate.All`
+
+## Phase 2 / Track B (only after the spike report)
+
+See `docs/spike-track-b.md`. Requires Windows media workers, calling webhooks, and tenant opt-in for Calls media permissions. Lobby admit is mandatory. Organizer eject / `leave_meeting` must close media sockets within 2 seconds.
+
+## Kill switch
+
+- User `leave_meeting` returns within 5s.
+- Organizer eject ends the session with `reason=ejected`.
+- There is no hidden-listener mode. The bot stays on the roster.
+
+## Secrets
+
+Never put client secrets, join passwords, lobby pins, or Graph tokens in:
+
+- agent chat
+- `joinUrlRedacted`
+- transcript segments
+- summaries
+- logs
+
+Join-URL query strings are stripped before any model-visible payload.

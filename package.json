@@ -1,0 +1,28 @@
+{
+  "name": "teams-audio-join-connector",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Grok Bot Teams Agent Audio Join connector — MCP tools for listen-first meeting notes.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "npm run typecheck",
+    "start": "tsx apps/mcp-host/src/main.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "tsx": "^4.19.3",
+    "vitest": "^3.0.9"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@teams-audio-join/mcp-host",
+  "version": "1.2.0",
+  "type": "module",
+  "bin": {
+    "teams-audio-join": "./src/main.ts"
+  },
+  "scripts": {
+    "start": "node --import tsx src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@teams-audio-join/shared": "1.2.0",
+    "@teams-audio-join/store": "1.2.0",
+    "@teams-audio-join/orchestrator": "1.2.0",
+    "@teams-audio-join/graph": "1.2.0",
+    "@teams-audio-join/summarizer": "1.2.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.3"
+  }
+}
