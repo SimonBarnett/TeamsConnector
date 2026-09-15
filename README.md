@@ -32,6 +32,7 @@ deploy/teams-app       Teams manifest (calling disabled; Track B overlay enables
 deploy/avatars         Haitch 640×360 camera-tile still
 docs/admin-install.md
 docs/workflows.md
+docs/ops.md
 packages/workflows     Calendar trigger + Hours draft events
 ```
 

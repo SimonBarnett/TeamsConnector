@@ -14,6 +14,7 @@ interface EncryptedSegment {
   seq: number;
   isPartial: boolean;
   ciphertext: string;
+  createdAtMs: number;
 }
 
 export class InMemoryStore implements ConnectorStore {
@@ -23,7 +24,7 @@ export class InMemoryStore implements ConnectorStore {
   private routines = new Map<string, StandingRoutine>();
   private sessions = new Map<string, SessionRecord>();
   private segments: EncryptedSegment[] = [];
-  private artifacts = new Map<string, string>();
+  private artifacts = new Map<string, { ciphertext: string; createdAtMs: number }>();
   private idem = new Map<string, IdempotencyRecord>();
   private audit: AuditEvent[] = [];
   readonly objectNames = new Map<string, string[]>();
@@ -101,6 +102,7 @@ export class InMemoryStore implements ConnectorStore {
         seq: seg.seq,
         isPartial: seg.isPartial,
         ciphertext: this.cipher.encrypt(JSON.stringify(seg)),
+        createdAtMs: Date.now(),
       });
     }
   }
@@ -123,16 +125,19 @@ export class InMemoryStore implements ConnectorStore {
   }
 
   async putArtifact(artifact: Artifact) {
-    this.artifacts.set(artifact.artifactId, this.cipher.encrypt(JSON.stringify(artifact)));
+    this.artifacts.set(artifact.artifactId, {
+      ciphertext: this.cipher.encrypt(JSON.stringify(artifact)),
+      createdAtMs: Date.parse(artifact.createdAt) || Date.now(),
+    });
   }
   async getArtifact(artifactId: string) {
-    const blob = this.artifacts.get(artifactId);
-    return blob ? (JSON.parse(this.cipher.decrypt(blob)) as Artifact) : undefined;
+    const row = this.artifacts.get(artifactId);
+    return row ? (JSON.parse(this.cipher.decrypt(row.ciphertext)) as Artifact) : undefined;
   }
   async latestArtifact(sessionId: string, style: string) {
     const all: Artifact[] = [];
-    for (const blob of this.artifacts.values()) {
-      const art = JSON.parse(this.cipher.decrypt(blob)) as Artifact;
+    for (const row of this.artifacts.values()) {
+      const art = JSON.parse(this.cipher.decrypt(row.ciphertext)) as Artifact;
       if (art.sessionId === sessionId && art.style === style) all.push(art);
     }
     all.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
@@ -157,5 +162,19 @@ export class InMemoryStore implements ConnectorStore {
   }
   async listAudit(sessionId: string) {
     return this.audit.filter((e) => e.sessionId === sessionId);
+  }
+
+  async sweepExpired(nowMs: number, ttlMs: number) {
+    const cutoff = nowMs - ttlMs;
+    const beforeSeg = this.segments.length;
+    this.segments = this.segments.filter((s) => s.createdAtMs >= cutoff);
+    let artifacts = 0;
+    for (const [id, row] of [...this.artifacts.entries()]) {
+      if (row.createdAtMs < cutoff) {
+        this.artifacts.delete(id);
+        artifacts += 1;
+      }
+    }
+    return { segments: beforeSeg - this.segments.length, artifacts };
   }
 }

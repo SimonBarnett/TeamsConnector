@@ -12,6 +12,8 @@ export interface FakeMeeting {
 export class FakeGraphClient implements GraphMeetingClient {
   transcriptionEnabled = true;
   failResolve = false;
+  failSubscribe = false;
+  readonly notify = new Map<string, () => void>();
 
   constructor(public meetings: FakeMeeting[] = []) {}
 
@@ -44,6 +46,19 @@ export class FakeGraphClient implements GraphMeetingClient {
       if (hit) return hit.content;
     }
     return "";
+  }
+
+  async subscribeTranscripts(onlineMeetingId: string, onNotify: () => void): Promise<{ id: string } | null> {
+    if (this.failSubscribe) return null;
+    this.notify.set(onlineMeetingId, onNotify);
+    return { id: `sub-${onlineMeetingId}` };
+  }
+
+  pushTranscript(onlineMeetingId: string, id: string, content: string): void {
+    const m = this.meetings.find((x) => x.meeting.onlineMeetingId === onlineMeetingId);
+    if (!m) return;
+    m.transcripts = [...(m.transcripts ?? []), { id, content }];
+    this.notify.get(onlineMeetingId)?.();
   }
 }
 

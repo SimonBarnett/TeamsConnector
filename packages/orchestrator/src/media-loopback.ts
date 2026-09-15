@@ -58,12 +58,17 @@ export class UnavailableMediaWorker implements MediaWorker {
 /** In-process Track B stand-in: admit, TTS play, barge-in ≤ 400 ms, leave ≤ 2 s. No files. */
 export class LoopbackMediaWorker implements MediaWorker {
   readonly sessions = new Map<string, SessionMedia>();
+  failNextAdmits = 0;
 
   async healthy(): Promise<boolean> {
     return true;
   }
 
   async admit(sessionId: string, opts: MediaAdmitOpts): Promise<{ videoSending: boolean; canHear: boolean }> {
+    if (this.failNextAdmits > 0) {
+      this.failNextAdmits -= 1;
+      throw new Error("media worker crash");
+    }
     this.sessions.set(sessionId, { muted: false });
     return { videoSending: opts.avatar, canHear: true };
   }

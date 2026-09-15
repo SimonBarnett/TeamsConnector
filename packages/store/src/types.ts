@@ -86,6 +86,9 @@ export interface ConnectorStore {
 
   appendAudit(event: AuditEvent): Promise<void>;
   listAudit(sessionId: string): Promise<AuditEvent[]>;
+
+  /** Delete transcript segments and artifacts older than ttlMs. Never deletes audit. */
+  sweepExpired(nowMs: number, ttlMs: number): Promise<{ segments: number; artifacts: number }>;
 }
 
 export type { CallMeta };

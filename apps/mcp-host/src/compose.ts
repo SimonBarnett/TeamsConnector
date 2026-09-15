@@ -5,6 +5,9 @@ import { FixtureLlmClient, XaiLlmClient, type LlmClient } from "@teams-audio-joi
 import { nowIso } from "@teams-audio-join/shared";
 
 export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env) {
+  if (env.NODE_ENV === "production" && !env.ARTIFACT_ENCRYPTION_KEY) {
+    throw new Error("ARTIFACT_ENCRYPTION_KEY is required in production");
+  }
   const store = new InMemoryStore(EnvelopeCipher.fromEnv(env.ARTIFACT_ENCRYPTION_KEY));
 
   const demo = env.DEMO_FIXTURE === "1" || (!env.AZURE_CLIENT_ID && env.NODE_ENV !== "production");

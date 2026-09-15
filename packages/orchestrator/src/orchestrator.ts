@@ -46,6 +46,7 @@ import { makeEvent, type EventSink } from "./events.ts";
 import { LoopbackMediaWorker, UnavailableMediaWorker, type MediaWorker } from "./media-loopback.ts";
 import { selectPlane } from "./plane.ts";
 import { assertAck, assertBound, assertJoinConsent, assertJoinQuota } from "./policy.ts";
+import { Metrics } from "./metrics.ts";
 import { announceText, EstimatedTts, type TtsEngine } from "./tts.ts";
 
 const IDEMPOTENCY_TTL_MS = 10 * 60 * 1000;
@@ -77,6 +78,8 @@ export interface OrchestratorOptions {
   assistantDisplayName?: string;
   wakePhrases?: string[];
   speakCooldownMs?: number;
+  metrics?: Metrics;
+  pollMs?: number;
 }
 
 export class Orchestrator {
@@ -89,6 +92,10 @@ export class Orchestrator {
   private readonly assistantDisplayName: string;
   private readonly wakePhrases: string[];
   private readonly speakCooldownMs: number;
+  readonly metrics: Metrics;
+  private readonly pollMs: number;
+  private readonly pollers = new Map<string, ReturnType<typeof setInterval>>();
+  private readonly rejoined = new Set<string>();
   private readonly summaryMeta = new Map<string, { count: number; lastAt: number; last?: Artifact }>();
   private readonly speakRt = new Map<string, SpeakRuntime>();
 
@@ -102,6 +109,8 @@ export class Orchestrator {
     this.assistantDisplayName = opts.assistantDisplayName ?? "Haitch (audio assistant)";
     this.wakePhrases = opts.wakePhrases ?? [];
     this.speakCooldownMs = opts.speakCooldownMs ?? SPEAK_COOLDOWN_MS;
+    this.metrics = opts.metrics ?? new Metrics();
+    this.pollMs = opts.pollMs ?? 0;
   }
 
   async call(tool: string, args: unknown, rawMeta: unknown): Promise<Envelope<unknown>> {
@@ -229,6 +238,8 @@ export class Orchestrator {
     await this.emitUpdated(session);
 
     session = await this.attachTranscript(session);
+    this.metrics.inc("join_success");
+    this.metrics.inc(`plane_selected_${session.plane}`);
     return ok(this.toJoinResponse(session, false), meta.requestId);
   }
 
@@ -419,6 +430,7 @@ export class Orchestrator {
 
     session.state = "leaving";
     await this.store.putSession(session);
+    this.stopTrackA(session.sessionId);
     await this.mediaWorker.leave(session.sessionId);
 
     const segments = await this.store.listSegments(session.sessionId, 0, false, 500);
@@ -543,10 +555,7 @@ export class Orchestrator {
   private async attachTranscript(session: SessionRecord): Promise<SessionRecord> {
     if (session.plane !== "transcript") {
       session.state = "in_lobby";
-      const admitted = await this.mediaWorker.admit(session.sessionId, {
-        avatar: session.avatar,
-        speak: session.mode === "listen_speak",
-      });
+      const admitted = await this.admitWithOneRejoin(session);
       session.admittedAt = nowIso();
       if (session.avatar && admitted.videoSending) {
         session.video = { sending: true, source: "still_avatar", width: 640, height: 360 };
@@ -652,7 +661,40 @@ export class Orchestrator {
     await this.store.putSession(session);
     await this.audit(session, "transcript_attach", "ok");
     await this.emitUpdated(session);
+    this.startTrackA(session);
     return session;
+  }
+
+  async refreshTranscripts(sessionId: string): Promise<number> {
+    const session = await this.store.getSession(sessionId);
+    if (!session || session.plane !== "transcript") return 0;
+    const omId = session.meeting.onlineMeetingId;
+    if (!omId) return 0;
+    const refs = await this.graph.listTranscripts(omId);
+    const contents = await Promise.all(refs.map((r) => this.graph.getTranscriptContent(r)));
+    const currentMax = await this.store.maxSeq(session.sessionId);
+    const existing = await this.store.listSegments(session.sessionId, 0, true, 500);
+    const seen = new Set(existing.map((s) => `${s.tMs}|${s.text}`));
+    const raw = contents.flatMap((c) => parseTranscriptContent(c, 0));
+    const classified = classifyCaptions(
+      raw.map((r) => ({ tMs: r.tMs, endMs: r.endMs, speaker: r.speaker, text: r.text })),
+      currentMax,
+      this.assistantDisplayName,
+      this.wakePhrases,
+      this.runtime(session.sessionId).played,
+    ).filter((s) => !seen.has(`${s.tMs}|${s.text}`));
+    if (classified.length === 0) return 0;
+    await this.store.appendSegments(session.sessionId, classified);
+    await this.events.emit(
+      makeEvent({
+        type: "transcript.delta",
+        tenantId: session.tenantId,
+        sessionId: session.sessionId,
+        agentId: session.agentId,
+        payload: { segments: classified.slice(0, 50) },
+      }),
+    );
+    return classified.length;
   }
 
   private toJoinResponse(session: SessionRecord, resumed: boolean): JoinMeetingResponse {
@@ -770,6 +812,7 @@ export class Orchestrator {
 
   /** Organizer eject or meeting ended. Closes media sockets then finalises. */
   async handleRemoteEnd(sessionId: string, reason: Extract<EndedReason, "ejected" | "meeting_ended">): Promise<{ closeLatencyMs: number }> {
+    this.stopTrackA(sessionId);
     const left = await this.mediaWorker.leave(sessionId);
     const session = await this.store.getSession(sessionId);
     if (!session || session.state === "ended" || session.state === "failed") return left;
@@ -795,6 +838,39 @@ export class Orchestrator {
       }),
     );
     return left;
+  }
+
+  private async admitWithOneRejoin(session: SessionRecord) {
+    const opts = { avatar: session.avatar, speak: session.mode === "listen_speak" };
+    try {
+      return await this.mediaWorker.admit(session.sessionId, opts);
+    } catch {
+      if (this.rejoined.has(session.sessionId)) throw new ConnectorError("dependency_unavailable", "Media worker failed after one rejoin.");
+      this.rejoined.add(session.sessionId);
+      await this.emitUpdated(session);
+      return await this.mediaWorker.admit(session.sessionId, opts);
+    }
+  }
+
+  private startTrackA(session: SessionRecord): void {
+    const omId = session.meeting.onlineMeetingId;
+    if (omId && this.graph.subscribeTranscripts) {
+      void this.graph.subscribeTranscripts(omId, () => {
+        void this.refreshTranscripts(session.sessionId);
+      });
+    }
+    if (this.pollMs > 0 && !this.pollers.has(session.sessionId)) {
+      this.pollers.set(
+        session.sessionId,
+        setInterval(() => void this.refreshTranscripts(session.sessionId), this.pollMs),
+      );
+    }
+  }
+
+  private stopTrackA(sessionId: string): void {
+    const t = this.pollers.get(sessionId);
+    if (t) clearInterval(t);
+    this.pollers.delete(sessionId);
   }
 
   private runtime(sessionId: string): SpeakRuntime {

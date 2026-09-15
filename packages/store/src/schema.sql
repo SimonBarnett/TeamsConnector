@@ -105,3 +105,20 @@ CREATE TABLE IF NOT EXISTS audit_events (
 );
 
 CREATE INDEX IF NOT EXISTS audit_session ON audit_events (session_id);
+
+CREATE TABLE IF NOT EXISTS standing_routines (
+  routine_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  mode TEXT NOT NULL DEFAULT 'listen',
+  plane TEXT NOT NULL DEFAULT 'auto',
+  avatar BOOLEAN NOT NULL DEFAULT FALSE,
+  match_json TEXT NOT NULL,
+  hours_draft BOOLEAN NOT NULL DEFAULT TRUE,
+  owner_memo BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS standing_routines_user ON standing_routines (tenant_id, user_id);

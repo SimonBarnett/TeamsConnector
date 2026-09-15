@@ -18,6 +18,11 @@ export interface GraphMeetingClient {
   getParticipants(onlineMeetingId: string, graphUserId?: string): Promise<Participant[]>;
   listTranscripts(onlineMeetingId: string, graphUserId?: string): Promise<GraphTranscriptRef[]>;
   getTranscriptContent(ref: GraphTranscriptRef, graphUserId?: string): Promise<string>;
+  /** Track A change notification. Return null to fall back to polling. */
+  subscribeTranscripts?(
+    onlineMeetingId: string,
+    onNotify: () => void,
+  ): Promise<{ id: string } | null>;
 }
 
 /**

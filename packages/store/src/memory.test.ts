@@ -64,4 +64,48 @@ describe("InMemoryStore", () => {
     const rows = await store.listAudit("ses_01K7Q3N8R2M0K7V1C4D8E2F6GH");
     expect(rows[0]?.detail ?? "").not.toContain("pwd=");
   });
+
+  it("TTL sweep deletes segments and artifacts but not audit", async () => {
+    const store = new InMemoryStore();
+    const id = newSessionId();
+    await store.putSession(session(id));
+    await store.appendSegments(id, [
+      {
+        seq: 1,
+        tMs: 0,
+        endMs: 1000,
+        speaker: "Simon",
+        speakerKind: "human",
+        text: "hello",
+        isPartial: false,
+        source: "teams_official",
+      },
+    ]);
+    await store.putArtifact({
+      artifactId: "art_01K7Q3N8R2M0K7V1C4D8E2F6GH",
+      sessionId: id,
+      style: "bullets",
+      partial: false,
+      createdAt: new Date(Date.now() - 20 * 86400_000).toISOString(),
+      summary: "x",
+      decisions: [],
+      actions: [],
+      openQuestions: [],
+      groundedSeqRange: { from: 1, to: 1 },
+    });
+    await store.appendAudit({
+      ts: nowIso(),
+      tenantId: "11111111-2222-3333-4444-555555555555",
+      userId: "user-1",
+      agentId: "haitch",
+      sessionId: id,
+      action: "join",
+      result: "ok",
+    });
+    const swept = await store.sweepExpired(Date.now() + 15 * 86400_000, 14 * 86400_000);
+    expect(swept.segments).toBe(1);
+    expect(swept.artifacts).toBe(1);
+    expect((await store.listAudit(id)).length).toBe(1);
+    expect(await store.listSegments(id, 0, true, 10)).toEqual([]);
+  });
 });

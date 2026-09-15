@@ -86,6 +86,11 @@ export function createHttpServer(orch: Orchestrator) {
         send(res, 200, { ok: true });
         return;
       }
+      if (req.method === "GET" && req.url === "/metrics") {
+        res.writeHead(200, { "content-type": "text/plain; version=0.0.4" });
+        res.end(orch.metrics.renderPrometheus());
+        return;
+      }
       if (req.method === "POST" && (req.url === "/mcp" || req.url === "/")) {
         const raw = await readBody(req);
         const msg = JSON.parse(raw) as JsonRpcReq;

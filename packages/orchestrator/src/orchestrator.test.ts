@@ -338,4 +338,66 @@ describe("Orchestrator", () => {
     expect(body.source).toBe("teams-audio-join");
     expect(body.hours % 0.25).toBe(0);
   });
+
+  it("increments join_success and refreshes Track A transcripts on notify", async () => {
+    const store = new InMemoryStore();
+    await seedReadyTenant(store);
+    const events = new MemoryEventSink();
+    const graph = new FakeGraphClient([fixtureCatchup()]);
+    const orch = new Orchestrator({ store, graph, events, llm: new FixtureLlmClient({ summary: "x" }) });
+    const joined = await orch.call("join_meeting", { eventId: "evt-priority", mode: "listen" }, testMeta());
+    expect(joined.ok).toBe(true);
+    expect(orch.metrics.get("join_success")).toBe(1);
+    if (!joined.ok) return;
+    const sessionId = (joined.data as { sessionId: string }).sessionId;
+    graph.pushTranscript(
+      "om-priority",
+      "tr-2",
+      `WEBVTT\n\n00:01:00.000 --> 00:01:02.000\n<v Simon Barnett>New cue after notify.\n`,
+    );
+    const added = await orch.refreshTranscripts(sessionId);
+    expect(added).toBeGreaterThanOrEqual(1);
+    const tx = await orch.call("get_transcript", { sessionId }, testMeta());
+    if (!tx.ok) return;
+    const texts = (tx.data as { segments: { text: string }[] }).segments.map((s) => s.text);
+    expect(texts.some((t) => t.includes("New cue after notify"))).toBe(true);
+  });
+
+  it("rejoins media once then fails visibly", async () => {
+    const store = new InMemoryStore();
+    await seedReadyTenant(store, { trackB: true });
+    const worker = new LoopbackMediaWorker();
+    worker.failNextAdmits = 1;
+    const orch = new Orchestrator({
+      store,
+      graph: new FakeGraphClient([fixtureCatchup()]),
+      events: new MemoryEventSink(),
+      llm: new FixtureLlmClient({ summary: "x" }),
+      mediaWorker: worker,
+    });
+    const okJoin = await orch.call(
+      "join_meeting",
+      { onlineMeetingId: "om-priority", mode: "listen_speak", plane: "auto" },
+      testMeta(),
+    );
+    expect(okJoin.ok).toBe(true);
+
+    const store2 = new InMemoryStore();
+    await seedReadyTenant(store2, { trackB: true });
+    const worker2 = new LoopbackMediaWorker();
+    worker2.failNextAdmits = 2;
+    const orch2 = new Orchestrator({
+      store: store2,
+      graph: new FakeGraphClient([fixtureCatchup()]),
+      events: new MemoryEventSink(),
+      llm: new FixtureLlmClient({ summary: "x" }),
+      mediaWorker: worker2,
+    });
+    const failJoin = await orch2.call(
+      "join_meeting",
+      { meetingUrl: "https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc/0", mode: "listen_speak", plane: "auto" },
+      testMeta(),
+    );
+    expect(failJoin.ok).toBe(false);
+  });
 });
