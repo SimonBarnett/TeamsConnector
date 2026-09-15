@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Teams Agent Audio Join Connector API",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "description": "Normative schemas for the Grok Bot Teams Agent Audio Join connector, including agent TTS, recognition of human/assistant-echo/owner-command utterances, and an optional outbound still avatar on the camera tile. Phase 3 standing listen, Hours draft, and owner memo events."
   },
   "servers": [
@@ -899,9 +899,7 @@
       "JoinMeetingRequest": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "mode"
-        ],
+        "required": [],
         "properties": {
           "meetingUrl": {
             "type": "string",
@@ -919,11 +917,12 @@
             "maxLength": 256
           },
           "mode": {
-            "$ref": "#/components/schemas/Mode"
+            "$ref": "#/components/schemas/Mode",
+            "default": "listen_speak"
           },
           "announce": {
             "type": "boolean",
-            "default": false
+            "default": true
           },
           "plane": {
             "$ref": "#/components/schemas/PlaneRequest",

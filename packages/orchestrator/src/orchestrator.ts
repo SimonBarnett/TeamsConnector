@@ -182,6 +182,10 @@ export class Orchestrator {
       if (existing.mode === req.mode) {
         return ok(this.toJoinResponse(existing, true), meta.requestId);
       }
+      if (req.mode === "listen_speak") {
+        const upgraded = await this.enableSpeak(existing);
+        return ok(this.toJoinResponse(upgraded, true), meta.requestId);
+      }
       throw new ConnectorError("conflict", "A live session exists for this meeting with a different mode.");
     }
     await assertJoinQuota(this.store, meta);
@@ -308,13 +312,24 @@ export class Orchestrator {
       );
     };
 
-    const allowed =
-      session.mode === "listen_speak" &&
-      session.plane === "media" &&
-      session.state === "speaking_enabled" &&
-      session.capabilities.canSpeak;
-    if (!allowed) {
-      return reject("mode_unsupported", "speak() is rejected when mode is listen or plane is transcript.");
+    let live = session;
+    if (
+      live.mode !== "listen_speak" ||
+      live.plane !== "media" ||
+      live.state !== "speaking_enabled" ||
+      !live.capabilities.canSpeak
+    ) {
+      try {
+        live = await this.enableSpeak(live);
+      } catch (err) {
+        if (err instanceof ConnectorError) {
+          return reject(err.code, err.message, err.details);
+        }
+        return reject("plane_unavailable", "Could not enable speaking into the meeting.");
+      }
+    }
+    if (!live.capabilities.canSpeak) {
+      return reject("plane_unavailable", "The assistant could not enable a speak path into the meeting.");
     }
 
     const blocked = speakBlockedReason(req.text);
@@ -838,6 +853,34 @@ export class Orchestrator {
       }),
     );
     return left;
+  }
+
+  /** Promote any live session to media listen_speak so speak() can talk. */
+  private async enableSpeak(session: SessionRecord): Promise<SessionRecord> {
+    if (session.state === "ended" || session.state === "failed") {
+      throw new ConnectorError("session_not_found", "Session has ended.");
+    }
+    session.mode = "listen_speak";
+    if (session.plane !== "media" || session.state === "listening" || session.state === "listening_deaf" || session.state === "in_lobby" || session.state === "joining") {
+      const admitted = await this.admitWithOneRejoin(session);
+      session.plane = "media";
+      session.admittedAt = session.admittedAt ?? nowIso();
+      if (session.avatar && admitted.videoSending) {
+        session.video = { sending: true, source: "still_avatar", width: 640, height: 360 };
+      }
+    }
+    session.state = "speaking_enabled";
+    session.capabilities = capabilitiesFor({
+      state: "speaking_enabled",
+      plane: "media",
+      mode: "listen_speak",
+      stt: session.capabilities.stt === "none" ? "live" : session.capabilities.stt,
+      avatar: session.avatar,
+      videoSending: session.video?.sending,
+    });
+    await this.store.putSession(session);
+    await this.emitUpdated(session);
+    return session;
   }
 
   private async admitWithOneRejoin(session: SessionRecord) {

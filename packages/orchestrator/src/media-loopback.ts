@@ -36,7 +36,7 @@ export class UnavailableMediaWorker implements MediaWorker {
     return false;
   }
   async admit(): Promise<{ videoSending: boolean; canHear: boolean }> {
-    return { videoSending: false, canHear: false };
+    throw new Error("media worker unavailable");
   }
   async play(): Promise<{ status: "playing" | "queued" }> {
     throw new Error("media worker unavailable");

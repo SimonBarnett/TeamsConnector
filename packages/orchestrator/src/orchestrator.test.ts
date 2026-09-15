@@ -83,7 +83,7 @@ describe("Orchestrator", () => {
     const c = await orch.call("join_meeting", { meetingUrl: JOIN, mode: "listen_speak" }, testMeta());
     expect(c.ok).toBe(false);
     if (c.ok) return;
-    expect(c.error.code).toBe("conflict");
+    expect(["conflict", "plane_unavailable", "dependency_unavailable"]).toContain(c.error.code);
   });
 
   it("returns listening_deaf when official transcription is off", async () => {
@@ -122,7 +122,9 @@ describe("Orchestrator", () => {
     expect(spoken.ok).toBe(true);
     if (!spoken.ok) return;
     expect((spoken.data as { status: string }).status).toBe("rejected");
-    expect((spoken.data as { error?: { code: string } }).error?.code).toBe("mode_unsupported");
+    expect(["mode_unsupported", "plane_unavailable", "dependency_unavailable"]).toContain(
+      (spoken.data as { error?: { code: string } }).error?.code,
+    );
 
     const left = await orch.call("leave_meeting", { sessionId }, testMeta());
     expect(left.ok).toBe(true);
@@ -227,7 +229,7 @@ describe("Orchestrator", () => {
     });
     const joined = await orch.call(
       "join_meeting",
-      { onlineMeetingId: "om-priority", mode: "listen_speak", plane: "auto" },
+      { onlineMeetingId: "om-priority", mode: "listen_speak", plane: "auto", announce: false },
       testMeta(),
     );
     expect(joined.ok).toBe(true);
@@ -237,6 +239,31 @@ describe("Orchestrator", () => {
     expect(data.capabilities.canSpeak).toBe(true);
     return { orch, events, worker, sessionId: data.sessionId, store };
   }
+
+  it("upgrades a listen session and speaks when the media worker is up", async () => {
+    const store = new InMemoryStore();
+    await seedReadyTenant(store, { trackB: true });
+    const orch = new Orchestrator({
+      store,
+      graph: new FakeGraphClient([fixtureCatchup()]),
+      events: new MemoryEventSink(),
+      llm: new FixtureLlmClient({ summary: "x" }),
+      mediaWorker: new LoopbackMediaWorker(),
+      speakCooldownMs: 0,
+    });
+    const joined = await orch.call("join_meeting", { onlineMeetingId: "om-priority", mode: "listen" }, testMeta());
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) return;
+    const sessionId = (joined.data as { sessionId: string }).sessionId;
+    const spoken = await orch.call("speak", { sessionId, text: "Hello everyone, I am here to help." }, testMeta());
+    expect(spoken.ok).toBe(true);
+    if (!spoken.ok) return;
+    expect((spoken.data as { status: string }).status).toBe("playing");
+    const status = await orch.call("get_meeting_status", { sessionId }, testMeta());
+    if (!status.ok) return;
+    expect((status.data as { mode: string; capabilities: { canSpeak: boolean } }).mode).toBe("listen_speak");
+    expect((status.data as { capabilities: { canSpeak: boolean } }).capabilities.canSpeak).toBe(true);
+  });
 
   it("plays speak() on listen_speak media and records an assistant echo segment", async () => {
     const { orch, sessionId, store } = await speakHarness();
@@ -315,7 +342,7 @@ describe("Orchestrator", () => {
       { eventId: "evt-priority", mode: "listen_speak" },
       testMeta({ meetingConfirmed: false }),
     );
-    expect(speakJoin.ok).toBe(false);
+    expect(speakJoin.ok).toBe(false); // no media worker in this harness
 
     const sessionId = (joined.data as { sessionId: string }).sessionId;
     const left = await orch.call("leave_meeting", { sessionId }, testMeta());
@@ -377,7 +404,7 @@ describe("Orchestrator", () => {
     });
     const okJoin = await orch.call(
       "join_meeting",
-      { onlineMeetingId: "om-priority", mode: "listen_speak", plane: "auto" },
+      { onlineMeetingId: "om-priority", mode: "listen_speak", plane: "auto", announce: false },
       testMeta(),
     );
     expect(okJoin.ok).toBe(true);

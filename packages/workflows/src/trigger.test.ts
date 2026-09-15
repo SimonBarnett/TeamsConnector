@@ -35,6 +35,7 @@ describe("CalendarTrigger", () => {
       graph,
       events,
       llm: new FixtureLlmClient({ summary: "Standup notes." }),
+      mediaWorker: new LoopbackMediaWorker(),
     });
     await orch.call(
       "upsert_standing_routine",

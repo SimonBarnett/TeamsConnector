@@ -40,7 +40,7 @@ Use `deploy/teams-app/manifest.track-b.json` for this path (`supportsCalling` an
 
 ### Speak (Phase 2)
 
-`join_meeting({ mode: "listen_speak" })` then `speak({ text })`:
+`join_meeting` defaults to `mode=listen_speak` (the assistant can talk). Then `speak({ text })`:
 
 - Plain text only, max 280 characters. No SSML.
 - Hard caps: 6 played utterances / session, 15 s cooldown after play start, queue depth 1.

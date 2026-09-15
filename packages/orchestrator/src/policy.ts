@@ -43,12 +43,6 @@ export async function assertJoinConsent(
   await assertAck(store, meta);
 
   if (meta.meetingConfirmed) return;
-  if (req.mode !== "listen") {
-    throw new ConnectorError(
-      "consent_required",
-      "Per-meeting confirmation is required unless a standing listen-only routine matches.",
-    );
-  }
 
   const routines = await store.listRoutines(meta.tenantId, meta.userId);
   const hit = findMatchingRoutine(routines, {
@@ -57,12 +51,11 @@ export async function assertJoinConsent(
     startAt: meeting?.startAt,
     meetingKey: meetingKey(req),
   });
-  if (!hit) {
-    throw new ConnectorError(
-      "consent_required",
-      "Per-meeting confirmation is required unless a standing allow-list matches.",
-    );
-  }
+  if (hit) return;
+  throw new ConnectorError(
+    "consent_required",
+    "Per-meeting confirmation is required unless a standing allow-list matches.",
+  );
 }
 
 export async function assertJoinQuota(store: ConnectorStore, meta: CallMeta): Promise<void> {

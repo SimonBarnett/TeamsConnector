@@ -47,7 +47,7 @@ export class CalendarTrigger {
 
       const envelope = await this.opts.orch.call(
         "join_meeting",
-        { eventId: ev.eventId, mode: "listen", plane: hit.plane, avatar: hit.avatar },
+        { eventId: ev.eventId, mode: hit.mode, plane: hit.plane, avatar: hit.avatar, announce: true },
         {
           tenantId: this.opts.tenantId,
           userId: this.opts.userId,

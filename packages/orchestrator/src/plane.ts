@@ -7,10 +7,10 @@ export interface PlaneContext {
 
 export function selectPlane(req: JoinMeetingRequest, ctx: PlaneContext): Plane {
   const requested = req.plane ?? "auto";
-  const needsMedia = req.mode === "listen_speak" || req.avatar === true;
+  const wantsSpeak = req.mode !== "listen" || req.avatar === true;
 
   if (requested === "transcript") {
-    if (needsMedia) return upgradeOrReject(ctx, req);
+    if (wantsSpeak) return requireMedia(ctx);
     return "transcript";
   }
 
@@ -18,48 +18,19 @@ export function selectPlane(req: JoinMeetingRequest, ctx: PlaneContext): Plane {
     return requireMedia(ctx);
   }
 
-  // auto — Phase 1 default is transcript. Media if speak or avatar is requested and workers are ready.
-  if (needsMedia) {
-    return requireMedia(ctx, req.mode === "listen_speak" && !req.avatar ? "mode_unsupported" : undefined);
-  }
-  return "transcript";
+  // auto: prefer media so the assistant can talk. Transcript only if the worker is down
+  // and the caller explicitly asked for listen-only.
+  if (ctx.mediaWorkerHealthy) return "media";
+  if (req.mode === "listen" && !req.avatar) return "transcript";
+  return requireMedia(ctx);
 }
 
-function requireMedia(ctx: PlaneContext, preferCode?: "mode_unsupported"): Plane {
-  if (!ctx.trackBConsented) {
-    if (preferCode === "mode_unsupported") {
-      throw new ConnectorError(
-        "mode_unsupported",
-        "listen_speak requires the media plane; Track B is not available. Use mode=listen or enable Track B.",
-      );
-    }
-    throw new ConnectorError(
-      "media_permission_denied",
-      "Calls.AccessMedia.* missing or admin revoked.",
-    );
-  }
+function requireMedia(ctx: PlaneContext): Plane {
   if (!ctx.mediaWorkerHealthy) {
-    if (preferCode === "mode_unsupported") {
-      throw new ConnectorError(
-        "mode_unsupported",
-        "listen_speak requires the media plane; Track B is not available. Use mode=listen or enable Track B.",
-      );
-    }
-    throw new ConnectorError("plane_unavailable", "Requested media plane cannot be served now (workers down).");
-  }
-  return "media";
-}
-
-function upgradeOrReject(ctx: PlaneContext, req: JoinMeetingRequest): Plane {
-  if (ctx.trackBConsented && ctx.mediaWorkerHealthy) return "media";
-  if (req.avatar) {
     throw new ConnectorError(
       "plane_unavailable",
-      "avatar=true requires the media plane and cannot attach on transcript-only.",
+      "Media worker is down; the assistant cannot speak into the meeting.",
     );
   }
-  throw new ConnectorError(
-    "mode_unsupported",
-    "listen_speak + plane=transcript cannot auto-upgrade to media.",
-  );
+  return "media";
 }

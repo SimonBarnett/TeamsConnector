@@ -13,7 +13,7 @@ This connector does **not** scrape Outlook, post Hours entries, or play memos in
 }
 ```
 
-Meta must include `confirmStanding: true` (or `meetingConfirmed: true`) to create a routine. Recording acknowledgement is still required. `listen_speak` is rejected — standing is listen-only.
+Meta must include `confirmStanding: true` (or `meetingConfirmed: true`) to create a routine. Recording acknowledgement is still required. Routines default to `listen_speak` so the assistant can talk.
 
 Matched joins skip per-meeting chat confirmation.
 

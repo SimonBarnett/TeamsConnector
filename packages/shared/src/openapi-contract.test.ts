@@ -41,7 +41,7 @@ describe("OpenAPI contract", () => {
         };
       };
     };
-    expect(raw.info.version).toBe("1.4.0");
+    expect(raw.info.version).toBe("1.5.0");
     expect(raw.components.schemas.Capabilities.required).toContain("canShowVideo");
     expect(raw.components.schemas.JoinMeetingRequest.properties.avatar?.default).toBe(false);
     expect(raw.components.schemas.VideoStatus.properties.source.enum).toEqual(["still_avatar", "none"]);

@@ -122,7 +122,7 @@ export interface StandingRoutine {
   userId: string;
   label: string;
   enabled: boolean;
-  mode: "listen";
+  mode: Mode;
   plane: "auto" | "transcript";
   avatar: boolean;
   match: StandingMatch;

@@ -32,7 +32,7 @@ describe("MCP host", () => {
       method: "tools/call",
       params: {
         name: "join_meeting",
-        arguments: { onlineMeetingId: "om-priority", mode: "listen" },
+        arguments: { onlineMeetingId: "om-priority", announce: false },
         meta: {
           tenantId: "11111111-2222-3333-4444-555555555555",
           userId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
@@ -48,7 +48,28 @@ describe("MCP host", () => {
       data: { plane: string; meeting: { joinUrlRedacted?: string } };
     };
     expect(envelope.ok).toBe(true);
-    expect(envelope.data.plane).toBe("transcript");
+    expect(envelope.data.plane).toBe("media");
+    expect((envelope.data as { mode: string }).mode).toBe("listen_speak");
     expect(envelope.data.meeting.joinUrlRedacted ?? "").not.toContain("pwd=");
+
+    const sessionId = (envelope.data as { sessionId: string }).sessionId;
+    const spoken = (await handleRpc(orch, {
+      jsonrpc: "2.0",
+      id: "req_speak",
+      method: "tools/call",
+      params: {
+        name: "speak",
+        arguments: { sessionId, text: "Hello, I am Haitch and I can hear you." },
+        meta: {
+          tenantId: "11111111-2222-3333-4444-555555555555",
+          userId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+          agentId: "haitch",
+          meetingConfirmed: true,
+        },
+      },
+    })) as { result: { content: { text: string }[]; isError: boolean } };
+    const spokenEnv = JSON.parse(spoken.result.content[0]!.text) as { ok: boolean; data: { status: string } };
+    expect(spokenEnv.ok).toBe(true);
+    expect(spokenEnv.data.status).toBe("playing");
   });
 });

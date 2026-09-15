@@ -15,7 +15,7 @@
   },
   "description": {
     "short": "Join Teams meetings to take notes.",
-    "full": "Visible audio assistant that attaches to official meeting transcripts and produces grounded notes. Does not speak unless listen_speak is enabled for the tenant. Never a hidden listener."
+    "full": "Visible audio assistant that joins the meeting to talk and take notes. Never a hidden listener."
   },
   "icons": {
     "outline": "outline.png",

@@ -125,11 +125,11 @@ export function validateJoinMeeting(raw: unknown): JoinMeetingRequest {
     "avatar",
   ], "join_meeting");
   const req: JoinMeetingRequest = {
-    mode: oneOf(obj, "mode", MODES),
+    mode: optOneOf(obj, "mode", MODES) ?? "listen_speak",
     meetingUrl: optString(obj, "meetingUrl", 2048),
     eventId: optString(obj, "eventId", 256),
     onlineMeetingId: optString(obj, "onlineMeetingId", 256),
-    announce: optBool(obj, "announce") ?? false,
+    announce: optBool(obj, "announce") ?? true,
     plane: optOneOf(obj, "plane", PLANE_REQUESTS) ?? "auto",
     locale: optString(obj, "locale", 32),
     waitForAdmitSec: optInt(obj, "waitForAdmitSec", 15, 180) ?? 60,
@@ -256,10 +256,7 @@ function validateMatch(raw: unknown): StandingMatch {
 export function validateUpsertRoutine(raw: unknown): Omit<StandingRoutine, "tenantId" | "userId" | "createdAt" | "routineId"> & { routineId?: string } {
   const obj = asRecord(raw, "upsert_standing_routine");
   unexpectedKeys(obj, ["routineId", "label", "enabled", "mode", "plane", "avatar", "match", "hoursDraft", "ownerMemo"], "upsert_standing_routine");
-  const mode = optOneOf(obj, "mode", ["listen"] as const) ?? "listen";
-  if (obj.mode === "listen_speak") {
-    throw new ConnectorError("invalid_argument", "Standing routines are listen-only.", { field: "mode" });
-  }
+  const mode = optOneOf(obj, "mode", MODES) ?? "listen_speak";
   const routineId = optString(obj, "routineId", 64);
   if (routineId && !ROUTINE_ID_RE.test(routineId)) {
     throw new ConnectorError("invalid_argument", "routineId is invalid", { field: "routineId" });

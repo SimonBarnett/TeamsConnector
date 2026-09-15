@@ -1,5 +1,5 @@
 import { InMemoryStore, EnvelopeCipher } from "@teams-audio-join/store";
-import { Orchestrator, MemoryEventSink, WebhookEventSink } from "@teams-audio-join/orchestrator";
+import { Orchestrator, MemoryEventSink, WebhookEventSink, LoopbackMediaWorker, UnavailableMediaWorker } from "@teams-audio-join/orchestrator";
 import { FakeGraphClient, fixtureCatchup, GraphRestClient, ClientCredentialsTokenProvider } from "@teams-audio-join/graph";
 import { FixtureLlmClient, XaiLlmClient, type LlmClient } from "@teams-audio-join/summarizer";
 import { nowIso } from "@teams-audio-join/shared";
@@ -18,7 +18,7 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env) {
       tenantId,
       installedAt: nowIso(),
       trackAConsented: true,
-      trackBConsented: false,
+      trackBConsented: true,
     });
     await store.putConnection({
       tenantId,
@@ -71,6 +71,7 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env) {
     graph,
     events: memory,
     llm,
+    mediaWorker: env.MEDIA_WORKER_ENABLED === "false" ? new UnavailableMediaWorker() : new LoopbackMediaWorker(),
     assistantDisplayName: env.ASSISTANT_DISPLAY_NAME,
   });
 

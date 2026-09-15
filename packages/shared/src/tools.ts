@@ -2,7 +2,7 @@ export const MCP_TOOLS = [
   {
     name: "join_meeting",
     description:
-      "Join or attach to a Microsoft Teams meeting to take notes. Does not speak unless mode=listen_speak.",
+      "Join a Microsoft Teams meeting as a talking assistant. Defaults to listen_speak (can talk). Pass mode=listen for notes-only.",
   },
   {
     name: "get_meeting_status",
@@ -14,7 +14,7 @@ export const MCP_TOOLS = [
   },
   {
     name: "speak",
-    description: "Queue a short utterance into the meeting. Rejected when mode is listen or plane is transcript.",
+    description: "Speak a short utterance into the meeting. Upgrades a listen/transcript session to media listen_speak when the worker is up.",
   },
   {
     name: "cancel_speech",
@@ -30,7 +30,7 @@ export const MCP_TOOLS = [
   },
   {
     name: "upsert_standing_routine",
-    description: "Create or update a listen-only standing join routine (for example daily standup).",
+    description: "Create or update a standing join routine (defaults to listen_speak so the assistant can talk).",
   },
   {
     name: "list_standing_routines",

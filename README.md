@@ -1,21 +1,21 @@
 # Teams Agent Audio Join Connector
 
-MCP connector that lets a Grok Bot agent attach to a Microsoft Teams meeting, hear what was said (official Graph transcripts in v1), and return grounded notes. It does **not** speak unless Track B media join is enabled for the tenant.
+MCP connector that lets a Grok Bot agent join a Microsoft Teams meeting, **talk**, hear what was said, and return grounded notes.
 
-This repository implements build spec v1.2 plus OpenAPI 1.4.0 (avatar, speak, standing listen, Hours draft) at `contracts/teams_audio_join.openapi.json`.
+This repository implements build spec v1.2 plus OpenAPI 1.5.0 at `contracts/teams_audio_join.openapi.json`.
 
 ## What v1 does
 
-- Track A (default): attach to the meeting’s official Graph transcript. No raw audio.
+- Default join is `listen_speak` on the media plane so the assistant can talk. `mode=listen` is notes-only.
 - Seven MCP tools: `join_meeting`, `get_meeting_status`, `get_transcript`, `speak`, `cancel_speech`, `request_summary`, `leave_meeting`.
 - Honest deaf-state: `canHear=false` when transcription is off. Summaries never invent a meeting from the title.
-- `speak` exists on the surface and returns `mode_unsupported` on the transcript plane. On Track B `listen_speak` it is policy-gated TTS (caps, cooldown, content filter, barge-in).
+- Speaks by default (`mode=listen_speak`, media plane). `speak()` upgrades a notes-only session when the media worker is up. Caps, content filter, and barge-in still apply.
 - Optional camera-tile still (`join_meeting.avatar=true`) on Track B only: outbound NV12 loop, never inbound participant video.
-- Phase 3: standing listen-only routines, Calendar trigger port, Hours draft (`requiresHumanConfirm: true`, never auto-posted), owner memo out of the Teams mix.
+- Phase 3: standing routines (default listen_speak), Calendar trigger, Hours draft (`requiresHumanConfirm: true`, never auto-posted), owner memo out of the Teams mix.
 - Encrypted transcript/artifact bodies. No WAV/PCM/Opus objects.
 - Separate Entra app from the chat-only Teams plugin. No `Calls.AccessMedia.All` on day-one install.
 
-Track B (live media participant) lives in `services/media-worker` as a Phase 0 spike. `plane=auto` stays on transcript until that spike reports five consecutive joins.
+`plane=auto` prefers the media plane whenever the worker is healthy. Set `MEDIA_WORKER_ENABLED=false` only to force notes-only.
 
 ## Layout
 

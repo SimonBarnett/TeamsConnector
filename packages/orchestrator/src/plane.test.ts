@@ -3,7 +3,7 @@ import { ConnectorError } from "@teams-audio-join/shared";
 import { selectPlane } from "./plane.ts";
 
 describe("plane selection", () => {
-  it("defaults auto+listen to transcript in Phase 1", () => {
+  it("keeps auto+listen on transcript only when the media worker is down", () => {
     expect(
       selectPlane(
         { mode: "listen", plane: "auto" },
@@ -12,7 +12,16 @@ describe("plane selection", () => {
     ).toBe("transcript");
   });
 
-  it("rejects listen_speak when Track B is unavailable", () => {
+  it("prefers media on auto so the assistant can talk", () => {
+    expect(
+      selectPlane(
+        { mode: "listen", plane: "auto" },
+        { mediaWorkerHealthy: true, trackBConsented: false },
+      ),
+    ).toBe("media");
+  });
+
+  it("rejects listen_speak when the media worker is down", () => {
     expect(() =>
       selectPlane(
         { mode: "listen_speak", plane: "auto" },
@@ -21,11 +30,11 @@ describe("plane selection", () => {
     ).toThrow(ConnectorError);
   });
 
-  it("upgrades listen_speak+transcript when media is healthy and consented", () => {
+  it("upgrades listen_speak+transcript when the media worker is healthy", () => {
     expect(
       selectPlane(
         { mode: "listen_speak", plane: "transcript" },
-        { mediaWorkerHealthy: true, trackBConsented: true },
+        { mediaWorkerHealthy: true, trackBConsented: false },
       ),
     ).toBe("media");
   });
