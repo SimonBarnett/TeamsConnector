@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { composeFromEnv } from "./compose.ts";
-import { handleRpc } from "./server.ts";
+import { createHttpServer, handleRpc } from "./server.ts";
 
 describe("MCP host", () => {
   it("lists the seven spec tools and serves join_meeting", async () => {
@@ -71,5 +71,34 @@ describe("MCP host", () => {
     const spokenEnv = JSON.parse(spoken.result.content[0]!.text) as { ok: boolean; data: { status: string } };
     expect(spokenEnv.ok).toBe(true);
     expect(spokenEnv.data.status).toBe("playing");
+  });
+
+  it("GET / and GET /mcp explain how to POST instead of returning not found", async () => {
+    const { orch, doctor } = await composeFromEnv({ DEMO_FIXTURE: "1", NODE_ENV: "test" });
+    const server = createHttpServer(orch, { doctor });
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as { port: number };
+    try {
+      const home = await fetch(`http://127.0.0.1:${port}/`);
+      expect(home.status).toBe(200);
+      expect(await home.text()).toMatch(/List tools/);
+      const asJson = await fetch(`http://127.0.0.1:${port}/?format=json`);
+      const body = (await asJson.json()) as { ok: boolean; hint: string };
+      expect(body.ok).toBe(true);
+      expect(body.hint).toMatch(/POST JSON-RPC to \/mcp/);
+      const mcpGet = await fetch(`http://127.0.0.1:${port}/mcp`);
+      expect(mcpGet.status).toBe(200);
+      expect(await mcpGet.text()).toMatch(/List tools/);
+      const listed = await fetch(`http://127.0.0.1:${port}/mcp`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      });
+      expect(listed.status).toBe(200);
+      const ready = await fetch(`http://127.0.0.1:${port}/ready`);
+      expect(ready.status).toBe(200);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    }
   });
 });
