@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
   "manifestVersion": "1.17",
-  "version": "1.2.0",
+  "version": "1.5.0",
   "id": "{{APP_ID}}",
   "developer": {
     "name": "Grok Bot",
@@ -14,8 +14,8 @@
     "full": "Haitch (audio assistant)"
   },
   "description": {
-    "short": "Join Teams meetings to take notes.",
-    "full": "Visible audio assistant that joins the meeting to talk and take notes. Never a hidden listener."
+    "short": "Join Teams meetings as a talking assistant.",
+    "full": "Visible audio assistant that joins the meeting to talk and take notes. Outbound camera-tile still only — the bot does not receive participant video. Never a hidden listener."
   },
   "icons": {
     "outline": "outline.png",
@@ -28,8 +28,8 @@
       "scopes": ["personal", "team", "groupChat"],
       "supportsFiles": false,
       "isNotificationOnly": false,
-      "supportsCalling": false,
-      "supportsVideo": false
+      "supportsCalling": true,
+      "supportsVideo": true
     }
   ],
   "permissions": ["identity"],

@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "npm run typecheck",
-    "start": "tsx apps/mcp-host/src/main.ts"
+    "start": "tsx apps/mcp-host/src/main.ts",
+    "doctor": "tsx apps/mcp-host/src/main.ts doctor"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

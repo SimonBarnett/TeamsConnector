@@ -2,7 +2,9 @@
 
 ## Persistence
 
-Set `DATABASE_URL` when Postgres is available. Unit tests use the in-memory store. Production must set `ARTIFACT_ENCRYPTION_KEY` (32-byte base64). Transcripts and artifacts TTL default **14 days**; the audit log is not swept.
+Do **not** set `DATABASE_URL` on this build. The host is in-memory; `/ready` fails if the URL is set. Production must set `ARTIFACT_ENCRYPTION_KEY` (32-byte base64). Transcripts and artifacts TTL default **14 days** when a persistent store exists; the audit log is not swept.
+
+`GET /ready` is the install doctor (`npm run doctor`). `GET /health` is liveness only.
 
 `GET /metrics` (HTTP transport) exposes counters: `join_success`, `plane_selected_transcript`, `plane_selected_media`. Histograms: `leave_latency_ms_*`, `summary_latency_ms_*` as they are recorded.
 
@@ -20,7 +22,7 @@ On join, the orchestrator subscribes to Graph transcript change notifications wh
 
 ## Calendar trigger
 
-`CALENDAR_CONNECTOR_URL` + `WORKFLOW_TRIGGER=1` to tick `HttpCalendarPort`. Tests keep `FakeCalendar`. This connector still does not write Hours.
+`CALENDAR_CONNECTOR_URL` + `WORKFLOW_TRIGGER=1` ticks `HttpCalendarPort` (or FakeCalendar if the URL is unset). This connector still does not write Hours.
 
 ## Media rejoin
 

@@ -108,4 +108,26 @@ describe("InMemoryStore", () => {
     expect((await store.listAudit(id)).length).toBe(1);
     expect(await store.listSegments(id, 0, true, 10)).toEqual([]);
   });
+
+  it("stores and deletes standing routines", async () => {
+    const store = new InMemoryStore();
+    const row = {
+      routineId: "rtn_01K7Q3N8R2M0K7V1C4D8E2F6GH",
+      tenantId: "11111111-2222-3333-4444-555555555555",
+      userId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      label: "Standup",
+      enabled: true,
+      mode: "listen_speak" as const,
+      plane: "auto" as const,
+      avatar: false,
+      match: { eventId: "evt-1" },
+      hoursDraft: true,
+      ownerMemo: false,
+      createdAt: nowIso(),
+    };
+    await store.putRoutine(row);
+    expect((await store.listRoutines(row.tenantId, row.userId))[0]?.label).toBe("Standup");
+    expect(await store.deleteRoutine(row.tenantId, row.userId, row.routineId)).toBe(true);
+    expect(await store.listRoutines(row.tenantId, row.userId)).toEqual([]);
+  });
 });

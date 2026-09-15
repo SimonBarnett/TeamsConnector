@@ -19,6 +19,27 @@ function routine(match: StandingRoutine["match"]): StandingRoutine {
 }
 
 describe("standing match", () => {
+  it("does not match a disabled routine", () => {
+    const r = routine({ eventId: "evt-1" });
+    r.enabled = false;
+    expect(matchesRoutine(r, { eventId: "evt-1" })).toBe(false);
+  });
+
+  it("matches eventId and localTime window", () => {
+    expect(
+      matchesRoutine(routine({ eventId: "evt-1", localTime: "09:00" }), {
+        eventId: "evt-1",
+        startAt: "2026-09-15T09:10:00.000Z",
+      }),
+    ).toBe(true);
+    expect(
+      matchesRoutine(routine({ eventId: "evt-1", localTime: "09:00" }), {
+        eventId: "evt-1",
+        startAt: "2026-09-15T10:00:00.000Z",
+      }),
+    ).toBe(false);
+  });
+
   it("matches subject + weekday", () => {
     // 2026-09-15 is Tuesday (2)
     expect(

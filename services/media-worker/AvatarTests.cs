@@ -52,6 +52,23 @@ public class AvatarTests
     }
 
     [Fact]
+    public void ListenSpeakAvatarIsSendRecvAudioAndSendOnlyVideo()
+    {
+        var sockets = MediaSessionPlan.ForListenSpeakWithAvatar();
+        MediaSessionPlan.EnsureNoInboundVideo(sockets);
+        Assert.Contains(sockets, s => s.Kind == "audio" && s.Direction == MediaDirection.Sendrecv);
+        Assert.Contains(sockets, s => s.Kind == "video" && s.Direction == MediaDirection.Sendonly);
+    }
+
+    [Fact]
+    public void ListenAudioOnlyHasNoVideoSocket()
+    {
+        var sockets = MediaSessionPlan.ForListenAudioOnly();
+        MediaSessionPlan.EnsureNoInboundVideo(sockets);
+        Assert.DoesNotContain(sockets, s => s.Kind == "video");
+    }
+
+    [Fact]
     public void EnsureNoInboundVideoRejectsRecv()
     {
         var bad = new[] { new MediaSocketPlan("video", MediaDirection.Recvonly) };

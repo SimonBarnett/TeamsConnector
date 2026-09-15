@@ -3,22 +3,31 @@ import { Orchestrator, MemoryEventSink, WebhookEventSink, LoopbackMediaWorker, U
 import { FakeGraphClient, fixtureCatchup, GraphRestClient, ClientCredentialsTokenProvider } from "@teams-audio-join/graph";
 import { FixtureLlmClient, XaiLlmClient, type LlmClient } from "@teams-audio-join/summarizer";
 import { nowIso } from "@teams-audio-join/shared";
+import { CalendarTrigger, FakeCalendar, HttpCalendarPort } from "@teams-audio-join/workflows";
+import { assertHostConfig, parseHostConfig, type HostConfig } from "./env.ts";
+import { runDoctor, type DoctorReport } from "./doctor.ts";
 
-export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env) {
-  if (env.NODE_ENV === "production" && !env.ARTIFACT_ENCRYPTION_KEY) {
-    throw new Error("ARTIFACT_ENCRYPTION_KEY is required in production");
-  }
-  const store = new InMemoryStore(EnvelopeCipher.fromEnv(env.ARTIFACT_ENCRYPTION_KEY));
+export interface Composed {
+  cfg: HostConfig;
+  orch: Orchestrator;
+  doctor: () => Promise<DoctorReport>;
+  banner: string;
+}
 
-  const demo = env.DEMO_FIXTURE === "1" || (!env.AZURE_CLIENT_ID && env.NODE_ENV !== "production");
-  if (demo) {
+export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<Composed> {
+  const cfg = parseHostConfig(env);
+  assertHostConfig(cfg);
+
+  const store = new InMemoryStore(EnvelopeCipher.fromEnv(cfg.encryptionKey));
+
+  if (cfg.demo) {
     const tenantId = env.DEMO_TENANT_ID ?? "11111111-2222-3333-4444-555555555555";
     const userId = env.DEMO_USER_ID ?? "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
     await store.putTenant({
       tenantId,
       installedAt: nowIso(),
       trackAConsented: true,
-      trackBConsented: true,
+      trackBConsented: cfg.mediaEnabled,
     });
     await store.putConnection({
       tenantId,
@@ -33,23 +42,23 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env) {
     });
   }
 
-  const graph = env.AZURE_CLIENT_ID && env.AZURE_TENANT_ID && env.AZURE_CLIENT_SECRET && env.GRAPH_USER_ID
+  const graph = cfg.azure
     ? new GraphRestClient(
         new ClientCredentialsTokenProvider({
-          tenantId: env.AZURE_TENANT_ID,
-          clientId: env.AZURE_CLIENT_ID,
-          clientSecret: env.AZURE_CLIENT_SECRET,
+          tenantId: cfg.azure.tenantId,
+          clientId: cfg.azure.clientId,
+          clientSecret: cfg.azure.clientSecret,
         }),
-        env.GRAPH_USER_ID,
+        cfg.azure.graphUserId,
       )
     : new FakeGraphClient([fixtureCatchup()]);
 
   let llm: LlmClient;
-  if (env.XAI_API_KEY) {
+  if (cfg.xaiKey) {
     llm = new XaiLlmClient({
-      apiKey: env.XAI_API_KEY,
-      baseUrl: env.XAI_BASE_URL,
-      model: env.XAI_MODEL,
+      apiKey: cfg.xaiKey,
+      baseUrl: cfg.xaiBaseUrl,
+      model: cfg.xaiModel,
     });
   } else {
     llm = new FixtureLlmClient({
@@ -61,19 +70,69 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env) {
   }
 
   const memory = new MemoryEventSink(
-    env.EVENT_WEBHOOK_URL && env.EVENT_WEBHOOK_SECRET
-      ? [new WebhookEventSink(env.EVENT_WEBHOOK_URL, env.EVENT_WEBHOOK_SECRET)]
-      : [],
+    cfg.webhook ? [new WebhookEventSink(cfg.webhook.url, cfg.webhook.secret)] : [],
   );
+
+  // Production Graph without a worker must not pretend to talk (loopback is in-process only).
+  const mediaWorker =
+    !cfg.mediaEnabled || cfg.mode === "graph-notes-only"
+      ? new UnavailableMediaWorker()
+      : new LoopbackMediaWorker();
 
   const orch = new Orchestrator({
     store,
     graph,
     events: memory,
     llm,
-    mediaWorker: env.MEDIA_WORKER_ENABLED === "false" ? new UnavailableMediaWorker() : new LoopbackMediaWorker(),
-    assistantDisplayName: env.ASSISTANT_DISPLAY_NAME,
+    mediaWorker,
+    assistantDisplayName: cfg.assistantDisplayName,
+    pollMs: cfg.pollMs,
   });
 
-  return { store, orch, events: memory, graph };
+  if (cfg.workflowTrigger) {
+    const calendar = cfg.calendarUrl ? new HttpCalendarPort(cfg.calendarUrl) : new FakeCalendar();
+    const tenantId = env.DEMO_TENANT_ID ?? "11111111-2222-3333-4444-555555555555";
+    const userId = env.DEMO_USER_ID ?? "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    const trigger = new CalendarTrigger({
+      calendar,
+      store,
+      orch,
+      events: memory,
+      tenantId,
+      userId,
+      agentId: "haitch",
+    });
+    const timer = setInterval(() => {
+      void trigger.tick();
+    }, 60_000);
+    timer.unref?.();
+  }
+
+  const doctor = () =>
+    runDoctor(cfg, {
+      graphProbe: cfg.azure
+        ? async () => {
+            const tok = new ClientCredentialsTokenProvider({
+              tenantId: cfg.azure!.tenantId,
+              clientId: cfg.azure!.clientId,
+              clientSecret: cfg.azure!.clientSecret,
+            });
+            const token = await tok.getToken();
+            return token.length > 0;
+          }
+        : undefined,
+    });
+
+  const banner = [
+    `teams-audio-join mode=${cfg.mode}`,
+    cfg.mode === "fixture-loopback" ? "speak() is local loopback; Teams attendees will not hear it" : "",
+    cfg.mode === "graph-notes-only" ? "Graph is live; media worker missing — assistant cannot speak into Teams" : "",
+    cfg.mode === "graph-waiting-for-worker" ? `Graph is live; MEDIA_WORKER_URL=${cfg.mediaWorkerUrl} (in-process loopback until createCall is wired)` : "",
+    cfg.databaseUrl ? "WARNING: DATABASE_URL is set but store is still in-memory" : "store=memory",
+    `summarizer=${cfg.xaiKey ? "xai" : "fixture"}`,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  return { cfg, orch, doctor, banner };
 }

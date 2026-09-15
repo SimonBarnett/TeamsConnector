@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { MCP_TOOLS, type Envelope } from "@teams-audio-join/shared";
 import type { Orchestrator } from "@teams-audio-join/orchestrator";
+import type { DoctorReport } from "./doctor.ts";
 
 interface JsonRpcReq {
   jsonrpc?: string;
@@ -38,7 +39,7 @@ export async function handleRpc(orch: Orchestrator, msg: JsonRpcReq): Promise<un
       result: {
         protocolVersion: "2024-11-05",
         capabilities: { tools: {} },
-        serverInfo: { name: "teams-audio-join", version: "1.2.0" },
+        serverInfo: { name: "teams-audio-join", version: "1.5.0" },
       },
     };
   }
@@ -79,10 +80,19 @@ export async function handleRpc(orch: Orchestrator, msg: JsonRpcReq): Promise<un
   };
 }
 
-export function createHttpServer(orch: Orchestrator) {
+export function createHttpServer(
+  orch: Orchestrator,
+  hooks?: { doctor?: () => Promise<DoctorReport> },
+) {
   return createServer(async (req, res) => {
     try {
-      if (req.method === "GET" && req.url === "/health") {
+      const path = req.url?.split("?")[0] ?? "";
+      if (req.method === "GET" && (path === "/health" || path === "/ready")) {
+        if (hooks?.doctor && path === "/ready") {
+          const report = await hooks.doctor();
+          send(res, report.ok ? 200 : 503, report);
+          return;
+        }
         send(res, 200, { ok: true });
         return;
       }

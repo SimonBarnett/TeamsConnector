@@ -28,7 +28,7 @@ packages/graph         Track A Graph adapter + VTT/JSON normaliser
 packages/summarizer    grounded xAI summaries
 apps/mcp-host          stdio + HTTP MCP server
 services/media-worker  .NET 8 Track B spike
-deploy/teams-app       Teams manifest (calling disabled; Track B overlay enables video)
+deploy/teams-app       Teams manifest (calling + video enabled)
 deploy/avatars         Haitch 640×360 camera-tile still
 docs/admin-install.md
 docs/workflows.md
@@ -43,20 +43,23 @@ Requires Node 22+.
 ```bash
 npm install
 npm test
-npm run typecheck
+npm run doctor
+npm start
 ```
 
-Demo MCP (fixture Graph meeting, no Azure):
+`npm run doctor` prints `mode=` (fixture-loopback vs Graph). Copy `.env.example` to `.env` first, or run `.\scripts\provision.ps1` on Windows to generate `ARTIFACT_ENCRYPTION_KEY`.
+
+Demo MCP (fixture Graph meeting, no Azure — **Teams attendees will not hear TTS**):
 
 ```bash
-npx tsx apps/mcp-host/src/main.ts
+npm start
 ```
 
-HTTP transport:
+HTTP transport (`GET /ready` is the doctor):
 
 ```bash
 set MCP_TRANSPORT=http
-npx tsx apps/mcp-host/src/main.ts
+npm start
 ```
 
 Call `join_meeting` with demo meta:
@@ -70,13 +73,9 @@ Call `join_meeting` with demo meta:
 }
 ```
 
-Postgres for local persistence:
+Do not set `DATABASE_URL` yet — the host still uses in-memory storage; `/ready` fails if the URL is set so you do not assume persistence.
 
-```bash
-docker compose up -d
-```
-
-Copy `.env.example` to `.env`. Production needs `ARTIFACT_ENCRYPTION_KEY` (32-byte base64), Graph app credentials, and `XAI_API_KEY` for real summaries.
+Production: `ARTIFACT_ENCRYPTION_KEY`, `AZURE_*`, `GRAPH_USER_ID`, `XAI_API_KEY`. See `docs/admin-install.md`.
 
 ## Non-goals (v1)
 
