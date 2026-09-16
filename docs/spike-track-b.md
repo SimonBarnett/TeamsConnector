@@ -15,7 +15,7 @@ Exit criteria from the original spike (path A restated):
 
 - [x] Worker joins a scheduled test meeting (`POST /communications/calls` service-hosted) — 2026-09-16 attempt 1
 - [x] `speak({ text })` is heard as that text (not silence) via playPrompt — Simon heard `The test phrase is sunflower-42`
-- [ ] Track A transcripts when transcription is on; `canHear=false` when off
+- [x] Track A transcripts when Graph has a transcript resource; `canHear=true` with official cues (2026-09-17). Live captions ≠ Graph file — item appeared after transcription stopped + `EnableGraphTranscriptAccess`. `canHear=false` before that. Off-during-meeting not re-tested (Graph file remains).
 - [x] No WAV/PCM persisted in the Node artifact store (playPrompt WAV lives in the worker with GUID + TTL)
 - [x] 5 consecutive joins (table below) — **5 of 5** (same scheduled meeting, unique phrases)
 - [x] Admin consent friction written for **JoinGroupCall**, not AccessMedia

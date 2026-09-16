@@ -27,7 +27,7 @@ export function parseWebVtt(vtt: string, seqStart = 1): Omit<TranscriptSegment, 
     const voice = text.match(/^<v\s+([^>]+)>(.*)$/i);
     if (voice) {
       speaker = (voice[1] ?? speaker).trim();
-      text = (voice[2] ?? "").trim();
+      text = (voice[2] ?? "").replace(/<\/v>\s*$/i, "").trim();
     } else {
       const labeled = text.match(/^([^:]{1,64}):\s*(.*)$/);
       if (labeled) {

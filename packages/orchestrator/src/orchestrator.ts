@@ -656,7 +656,9 @@ export class Orchestrator {
       if (session.announce && session.state === "speaking_enabled") {
         await this.playAnnounce(session);
       }
-      return session;
+      this.startTrackA(session);
+      await this.refreshTranscripts(session.sessionId);
+      return (await this.store.getSession(session.sessionId)) ?? session;
     }
 
     const omId = session.meeting.onlineMeetingId;
@@ -757,10 +759,15 @@ export class Orchestrator {
 
   async refreshTranscripts(sessionId: string): Promise<number> {
     const session = await this.store.getSession(sessionId);
-    if (!session || session.plane !== "transcript") return 0;
+    if (!session) return 0;
     const omId = session.meeting.onlineMeetingId;
     if (!omId) return 0;
-    const refs = await this.graph.listTranscripts(omId);
+    let refs;
+    try {
+      refs = await this.graph.listTranscripts(omId);
+    } catch {
+      return 0;
+    }
     const contents = await Promise.all(refs.map((r) => this.graph.getTranscriptContent(r)));
     const currentMax = await this.store.maxSeq(session.sessionId);
     const existing = await this.store.listSegments(session.sessionId, 0, true, 500);
@@ -773,17 +780,22 @@ export class Orchestrator {
       this.wakePhrases,
       this.runtime(session.sessionId).played,
     ).filter((s) => !seen.has(`${s.tMs}|${s.text}`));
-    if (classified.length === 0) return 0;
-    await this.store.appendSegments(session.sessionId, classified);
-    await this.events.emit(
-      makeEvent({
-        type: "transcript.delta",
-        tenantId: session.tenantId,
-        sessionId: session.sessionId,
-        agentId: session.agentId,
-        payload: { segments: classified.slice(0, 50) },
-      }),
-    );
+    if (classified.length) {
+      await this.store.appendSegments(session.sessionId, classified);
+      await this.events.emit(
+        makeEvent({
+          type: "transcript.delta",
+          tenantId: session.tenantId,
+          sessionId: session.sessionId,
+          agentId: session.agentId,
+          payload: { segments: classified.slice(0, 50) },
+        }),
+      );
+    }
+    if (refs.length > 0 && !session.capabilities.canHear) {
+      session.capabilities = { ...session.capabilities, canHear: true, stt: "official" };
+      await this.store.putSession(session);
+    }
     return classified.length;
   }
 
