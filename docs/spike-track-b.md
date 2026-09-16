@@ -17,7 +17,7 @@ Exit criteria from the original spike (path A restated):
 - [x] `speak({ text })` is heard as that text (not silence) via playPrompt — Simon heard `The test phrase is sunflower-42`
 - [ ] Track A transcripts when transcription is on; `canHear=false` when off
 - [x] No WAV/PCM persisted in the Node artifact store (playPrompt WAV lives in the worker with GUID + TTL)
-- [ ] 5 consecutive joins (table below) — **4 of 5**
+- [x] 5 consecutive joins (table below) — **5 of 5** (same scheduled meeting, unique phrases)
 - [x] Admin consent friction written for **JoinGroupCall**, not AccessMedia
 
 Do **not** flip `plane=auto` to media until this report is signed (five dated rows).
@@ -40,7 +40,7 @@ Do **not** flip `plane=auto` to media until this report is signed (five dated ro
 | 2 | [x] | The second test phrase is bluebird-17 | 2026-09-16 same meeting. Speak `playing` / `audibleInTeams=true`. Human confirmed heard. |
 | 3 | [x] | The third test phrase is copper-99 | 2026-09-16 same meeting. Speak `playing` / `audibleInTeams=true`. Human confirmed heard. |
 | 4 | [x] | The fourth test phrase is maple-4 | 2026-09-16 same meeting. Speak `playing` / `audibleInTeams=true`. Human confirmed heard. |
-| 5 | | | |
+| 5 | [x] | The fifth test phrase is lantern-5 | 2026-09-16 same meeting. Speak `playing` / `audibleInTeams=true`. Human confirmed heard. |
 
 ## Consent friction
 
@@ -59,4 +59,4 @@ Doctor `/ready` was green (Graph + media healthy) before the join.
 
 - [x] Path A: playPrompt egress + Track A hear
 - [ ] Path B: application-hosted media (deferred)
-- [ ] Signed for `plane=auto` → media — **not yet** (need attempts 2–5)
+- [ ] Signed for `plane=auto` → media — **not yet** (Track A `canHear` on/off still untested)
