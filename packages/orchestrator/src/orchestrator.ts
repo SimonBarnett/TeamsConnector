@@ -98,6 +98,7 @@ export class Orchestrator {
   private readonly pollMs: number;
   private readonly audibleInTeams: boolean;
   private readonly pollers = new Map<string, ReturnType<typeof setInterval>>();
+  private readonly liveIds = new Set<string>();
   private readonly rejoined = new Set<string>();
   private readonly summaryMeta = new Map<string, { count: number; lastAt: number; last?: Artifact }>();
   private readonly speakRt = new Map<string, SpeakRuntime>();
@@ -250,6 +251,7 @@ export class Orchestrator {
       speak: { utterancesUsed: 0, utterancesMax: 6 },
     };
     await this.store.putSession(session);
+    this.liveIds.add(session.sessionId);
     await this.audit(session, "join", "ok");
     await this.emitUpdated(session);
 
@@ -487,6 +489,20 @@ export class Orchestrator {
   }
 
   /** Worker callback: hangup/eject ends the Node session. */
+  /** Best-effort hangup on process stop so Graph calls are not orphaned. */
+  async shutdown(): Promise<void> {
+    const ids = new Set([...this.liveIds, ...this.pollers.keys(), ...this.speakRt.keys()]);
+    for (const id of ids) {
+      const session = await this.store.getSession(id);
+      if (!session || session.state === "ended" || session.state === "failed") continue;
+      try {
+        await this.finalizeLeave(session, "error");
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+
   async handleMediaEvent(sessionId: string, event: "established" | "ejected"): Promise<void> {
     const session = await this.store.getSession(sessionId);
     if (!session) return;
@@ -534,6 +550,7 @@ export class Orchestrator {
       avatar: session.avatar,
       videoSending: false,
     });
+    this.liveIds.delete(session.sessionId);
     await this.store.putSession(session);
     await this.audit(session, "leave", "ok");
     await this.events.emit(

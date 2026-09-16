@@ -70,10 +70,16 @@ public sealed class CallRegistry
         return true;
     }
 
+    public string? PeekActivePrompt(string sessionId) =>
+        _bySession.TryGetValue(sessionId, out var e) ? e.ActiveUtteranceId : null;
+
     public void ClearActivePrompt(string sessionId)
     {
         if (_bySession.TryGetValue(sessionId, out var e)) e.ActiveUtteranceId = null;
     }
+
+    public IReadOnlyList<(string SessionId, string CallId)> Snapshot() =>
+        _bySession.Select(kv => (kv.Key, kv.Value.CallId)).ToList();
 
     public void Remove(string sessionId)
     {

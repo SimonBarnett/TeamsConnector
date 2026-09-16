@@ -7,6 +7,7 @@ describe("runDoctor", () => {
     const report = await runDoctor(parseHostConfig({ NODE_ENV: "test" }));
     expect(report.mode).toBe("fixture-loopback");
     expect(report.checks.find((c) => c.name === "media")?.detail).toMatch(/loopback/);
+    expect(report.checks.find((c) => c.name === "postgres")?.detail).toMatch(/orphan/);
     expect(formatDoctor(report)).toContain("mode=fixture-loopback");
   });
 

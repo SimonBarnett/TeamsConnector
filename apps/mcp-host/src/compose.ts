@@ -142,7 +142,9 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
     `teams-audio-join mode=${cfg.mode}`,
     cfg.mode === "fixture-loopback" ? "speak() is local loopback; Teams attendees will not hear it" : "",
     cfg.mode === "graph-notes-only" ? "Graph is live; media worker missing — assistant cannot speak into Teams" : "",
-    cfg.mode === "graph-waiting-for-worker" ? `Graph is live; HttpMediaWorker → ${cfg.mediaWorkerUrl} (Path A playPrompt)` : "",
+    cfg.mode === "graph-waiting-for-worker"
+      ? `Graph is live; HttpMediaWorker → ${cfg.mediaWorkerUrl} (Path A createCall + playPrompt)`
+      : "",
     cfg.databaseUrl ? "store=postgres" : "store=memory",
     `summarizer=${cfg.xaiKey ? "xai" : "fixture"}`,
   ]

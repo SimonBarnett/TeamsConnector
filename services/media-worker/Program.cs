@@ -28,7 +28,26 @@ GraphJoinClient? graph = string.IsNullOrWhiteSpace(tenant) || string.IsNullOrWhi
 AzureTts? tts = string.IsNullOrWhiteSpace(speechKey) ? null : new AzureTts(speechKey, speechRegion);
 
 var registry = new CallRegistry();
-var prompts = new System.Collections.Concurrent.ConcurrentDictionary<string, byte[]>();
+var prompts = new PromptStore();
+var log = app.Logger;
+
+var sweep = new PeriodicTimer(TimeSpan.FromSeconds(30));
+_ = Task.Run(async () =>
+{
+    while (await sweep.WaitForNextTickAsync()) prompts.Sweep(DateTimeOffset.UtcNow);
+});
+
+app.Lifetime.ApplicationStopping.Register(() =>
+{
+    sweep.Dispose();
+    foreach (var (sessionId, callId) in registry.Snapshot())
+    {
+        if (graph is null || string.IsNullOrEmpty(callId)) continue;
+        try { graph.DeleteCallAsync(callId).GetAwaiter().GetResult(); }
+        catch { /* best-effort hangup */ }
+        registry.Remove(sessionId);
+    }
+});
 
 app.Use(async (ctx, next) =>
 {
@@ -62,13 +81,16 @@ app.Use(async (ctx, next) =>
 
 app.MapGet("/health", () =>
 {
-    var configured = graph is not null && tts is not null;
+    var publicLoopback = PublicBase.IsLoopback(publicBase);
+    var configured = graph is not null && tts is not null && !publicLoopback;
     return Results.Json(new
     {
         healthy = configured,
         plane = "media",
         graph = graph is not null,
         tts = tts is not null,
+        publicBase,
+        publicLoopback,
         path = "A-playPrompt",
         callback,
     });
@@ -81,7 +103,11 @@ app.MapPost("/callback", async (HttpRequest req) =>
     {
         if (string.IsNullOrEmpty(n.CallId) || !registry.TryGetSession(n.CallId, out var sessionId)) continue;
         if (n.Established) registry.SetState(sessionId, CallLifecycle.Established);
-        if (n.PlayCompleted) registry.ClearActivePrompt(sessionId);
+        if (n.PlayCompleted)
+        {
+            prompts.Complete(registry.PeekActivePrompt(sessionId));
+            registry.ClearActivePrompt(sessionId);
+        }
         if (n.Terminated)
         {
             registry.SetState(sessionId, CallLifecycle.Terminated);
@@ -119,9 +145,9 @@ app.MapPost("/play", async (PlayRequest body) =>
     {
         return Results.Json(new { error = "AZURE_SPEECH_KEY is required; refusing to play silence" }, statusCode: 503);
     }
-    if (string.IsNullOrWhiteSpace(publicBase))
+    if (string.IsNullOrWhiteSpace(publicBase) || PublicBase.IsLoopback(publicBase))
     {
-        return Results.Json(new { error = "PUBLIC_BASE_URL is required for playPrompt" }, statusCode: 503);
+        return Results.Json(new { error = "PUBLIC_BASE_URL must be a public HTTPS host Graph can GET (not localhost)" }, statusCode: 503);
     }
     byte[] wav;
     try
@@ -136,78 +162,28 @@ app.MapPost("/play", async (PlayRequest body) =>
     {
         return Results.Json(new { error = "refusing silent WAV" }, statusCode: 503);
     }
-    prompts[body.UtteranceId] = wav;
-    var uri = $"{publicBase.TrimEnd('/')}/prompts/{Uri.EscapeDataString(body.UtteranceId)}.wav";
+    var promptId = prompts.Put(body.UtteranceId, wav, DateTimeOffset.UtcNow);
+    var uri = $"{publicBase.TrimEnd('/')}/prompts/{promptId}.wav";
+    log.LogInformation("playPrompt mediaUri={Uri} utterance={UtteranceId}", uri, body.UtteranceId);
     await graph.PlayPromptAsync(callId, uri);
     registry.SetActivePrompt(body.SessionId, body.UtteranceId);
-    return Results.Json(new { status = "playing" });
+    return Results.Json(new { status = "playing", mediaUri = uri });
 });
 
-app.MapGet("/prompts/{id}.wav", (string id) =>
-    prompts.TryGetValue(id, out var wav) ? Results.File(wav, "audio/wav") : Results.NotFound());
-
-app.MapPost("/cancel", async (SessionBody body) =>
+app.MapGet("/prompts/{id}.wav", (string id, HttpContext ctx) =>
 {
-    var started = DateTime.UtcNow;
-    if (!registry.TryTakeActivePrompt(body.SessionId, body.UtteranceId, out var utteranceId))
+    if (prompts.TryGet(id, out var wav))
     {
-        return Results.Json(new { error = "nothing playing" }, statusCode: 409);
+        log.LogInformation("GET /prompts/{Id}.wav {Status} from {Ip}", id, 200, ctx.Connection.RemoteIpAddress);
+        return Results.File(wav, "audio/wav");
     }
-    if (!registry.TryGetCall(body.SessionId, out var callId) || graph is null)
-    {
-        return Results.Json(new { error = "session not in a Graph call" }, statusCode: 404);
-    }
-    try
-    {
-        await graph.CancelMediaProcessingAsync(callId);
-    }
-    catch (Exception ex)
-    {
-        registry.SetActivePrompt(body.SessionId, utteranceId);
-        return Results.Json(new { error = ex.Message }, statusCode: 502);
-    }
-    return Results.Json(new
-    {
-        cancelled = new[] { utteranceId },
-        stopLatencyMs = (int)(DateTime.UtcNow - started).TotalMilliseconds,
-    });
+    log.LogInformation("GET /prompts/{Id}.wav {Status} from {Ip}", id, 404, ctx.Connection.RemoteIpAddress);
+    return Results.NotFound();
 });
 
-app.MapPost("/barge-in", async (SessionBody body) =>
-{
-    var started = DateTime.UtcNow;
-    if (!registry.TryTakeActivePrompt(body.SessionId, null, out var utteranceId))
-    {
-        return Results.Json(new { error = "nothing playing" }, statusCode: 409);
-    }
-    if (!registry.TryGetCall(body.SessionId, out var callId) || graph is null)
-    {
-        return Results.Json(new { error = "session not in a Graph call" }, statusCode: 404);
-    }
-    try
-    {
-        await graph.CancelMediaProcessingAsync(callId);
-    }
-    catch (Exception ex)
-    {
-        registry.SetActivePrompt(body.SessionId, utteranceId);
-        return Results.Json(new { error = ex.Message }, statusCode: 502);
-    }
-    return Results.Json(new
-    {
-        cancelled = new[] { utteranceId },
-        stopLatencyMs = (int)(DateTime.UtcNow - started).TotalMilliseconds,
-    });
-});
-
-app.MapPost("/mute", (SessionBody body) =>
-{
-    if (!registry.TryTakeActivePrompt(body.SessionId, null, out var utteranceId))
-    {
-        return Results.Json(new { cancelled = Array.Empty<string>() });
-    }
-    return Results.Json(new { cancelled = new[] { utteranceId } });
-});
+app.MapPost("/cancel", (SessionBody body) => StopPrompt(body.SessionId, body.UtteranceId));
+app.MapPost("/barge-in", (SessionBody body) => StopPrompt(body.SessionId, null));
+app.MapPost("/mute", (SessionBody body) => StopPrompt(body.SessionId, null));
 
 app.MapPost("/leave", async (SessionBody body) =>
 {
@@ -219,6 +195,34 @@ app.MapPost("/leave", async (SessionBody body) =>
     registry.Remove(body.SessionId);
     return Results.Json(new { closeLatencyMs = (int)(DateTime.UtcNow - started).TotalMilliseconds });
 });
+
+async Task<IResult> StopPrompt(string sessionId, string? utteranceId)
+{
+    var started = DateTime.UtcNow;
+    if (!registry.TryTakeActivePrompt(sessionId, utteranceId, out var taken))
+    {
+        return Results.Json(new { error = "nothing playing" }, statusCode: 409);
+    }
+    if (!registry.TryGetCall(sessionId, out var callId) || graph is null)
+    {
+        return Results.Json(new { error = "session not in a Graph call" }, statusCode: 404);
+    }
+    try
+    {
+        await graph.CancelMediaProcessingAsync(callId);
+    }
+    catch (Exception ex)
+    {
+        registry.SetActivePrompt(sessionId, taken);
+        return Results.Json(new { error = ex.Message }, statusCode: 502);
+    }
+    prompts.Complete(taken);
+    return Results.Json(new
+    {
+        cancelled = new[] { taken },
+        stopLatencyMs = (int)(DateTime.UtcNow - started).TotalMilliseconds,
+    });
+}
 
 app.Run();
 

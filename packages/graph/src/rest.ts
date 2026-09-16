@@ -269,8 +269,12 @@ export class GraphRestClient implements GraphMeetingClient {
     const res = await this.graph(
       `/users/${encodeURIComponent(user)}/onlineMeetings/${encodeURIComponent(onlineMeetingId)}/transcripts`,
     );
-    if (res.status === 404) return [];
-    if (!res.ok) throw new GraphHttpError(res.status, await res.text());
+    if (res.status === 404) {
+      const err = new GraphHttpError(404, await res.text());
+      if (err.connectorCode === "policy_missing") throw err;
+      return [];
+    }
+    if (!res.ok) throw new GraphHttpError(res.status, await res.text(), { collection: res.status === 403 || res.status === 401 });
     const json = (await res.json()) as {
       value?: { id: string; createdDateTime?: string; transcriptContentUrl?: string }[];
     };

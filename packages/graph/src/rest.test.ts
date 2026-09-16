@@ -110,6 +110,16 @@ describe("GraphRestClient", () => {
     expect(seen.some((u) => u.includes("$filter=") && u.includes("JoinWebUrl"))).toBe(true);
   });
 
+  it("listTranscripts 404 without policy language is an empty list", async () => {
+    const g = new GraphRestClient(tokens, "user-1", async () => json(404, { error: { message: "item not found" } }));
+    expect(await g.listTranscripts("om-1")).toEqual([]);
+  });
+
+  it("throws policy_missing on transcripts 403 instead of an empty list", async () => {
+    const g = new GraphRestClient(tokens, "user-1", async () => json(403, { error: { code: "Forbidden" } }));
+    await expect(g.listTranscripts("om-1")).rejects.toMatchObject({ connectorCode: "policy_missing" });
+  });
+
   it("lists transcripts and fetches content", async () => {
     const g = new GraphRestClient(tokens, "user-1", async (url) => {
       if (String(url).includes("/transcripts") && !String(url).includes("/content")) {

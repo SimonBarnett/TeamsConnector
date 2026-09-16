@@ -15,6 +15,16 @@ public class GraphJoinTests
     }
 
     [Fact]
+    public async Task MuteAndCancelShareCancelMediaProcessingPath()
+    {
+        var handler = new RecordingHandler();
+        var http = new HttpClient(handler);
+        var client = new GraphJoinClient("t", "id", "sec", "https://cb/callback", http);
+        await client.CancelMediaProcessingAsync("call-mute");
+        Assert.Contains("/communications/calls/call-mute/cancelMediaProcessing", handler.LastUri);
+    }
+
+    [Fact]
     public async Task CancelMediaProcessingPostsGraphPath()
     {
         var handler = new RecordingHandler();

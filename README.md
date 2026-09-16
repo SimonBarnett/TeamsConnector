@@ -1,21 +1,23 @@
 # Teams Agent Audio Join Connector
 
-MCP connector that lets a Grok Bot agent join a Microsoft Teams meeting, **talk**, hear what was said, and return grounded notes.
+MCP connector that lets a Grok Bot agent join a Microsoft Teams meeting as **notes-only by default** (Track A official transcripts), optionally speak via Path A Graph `playPrompt`, and return grounded notes.
 
 This repository implements build spec v1.2 plus OpenAPI 1.5.0 at `contracts/teams_audio_join.openapi.json`.
 
+**Default `join_meeting` mode is `listen` (Track A transcripts, `plane=auto` → transcript). `listen_speak` is explicit. Fixture/loopback `speak()` returns `played_locally` with `audibleInTeams: false` — Teams attendees do not hear it. `get_meeting_status.participants` can be empty mid-call (attendance reports land after the meeting).**
+
 ## What v1 does
 
-- Default join is **listen** (Track A official transcripts). `mode=listen_speak` is explicit Path A Graph `playPrompt` (not application-hosted media).
-- Seven MCP tools: `join_meeting`, `get_meeting_status`, `get_transcript`, `speak`, `cancel_speech`, `request_summary`, `leave_meeting`.
+- Default join is **listen** (Track A official transcripts). Pass `mode=listen_speak` for Path A Graph `playPrompt` (not application-hosted media).
+- Seven MCP tools: `join_meeting`, `get_meeting_status`, `get_transcript`, `speak`, `cancel_speech`, `request_summary`, `leave_meeting`. Hours/calendar tools stay hidden unless `WORKFLOW_TRIGGER=1`.
 - Honest deaf-state: `canHear=false` when transcription is off. Summaries never invent a meeting from the title.
-- Speaks by default (`mode=listen_speak`, media plane). `speak()` upgrades a notes-only session when the media worker is up. Caps, content filter, and barge-in still apply.
-- Optional camera-tile still (`join_meeting.avatar=true`) on Track B only: outbound NV12 loop, never inbound participant video.
-- Phase 3: standing routines (default listen_speak), Calendar trigger, Hours draft (`requiresHumanConfirm: true`, never auto-posted), owner memo out of the Teams mix.
-- Encrypted transcript/artifact bodies. No WAV/PCM/Opus objects.
+- `speak()` on a listen session upgrades to media `listen_speak` only when the Windows worker is healthy (Graph + Azure Speech + a **public** `PUBLIC_BASE_URL`). Caps, content filter, and barge-in still apply.
+- Optional camera-tile still (`join_meeting.avatar=true`) is Path A send-only video, never inbound participant video.
+- Standing routines, Calendar trigger, and Hours draft stay behind `WORKFLOW_TRIGGER=1`. Hours always `requiresHumanConfirm: true`.
+- Encrypted transcript/artifact bodies. No WAV/PCM/Opus objects in the Node store.
 - Separate Entra app from the chat-only Teams plugin. No `Calls.AccessMedia.All` on day-one install.
 
-`plane=auto` prefers the media plane whenever the worker is healthy. Set `MEDIA_WORKER_URL` to the Windows worker (`dotnet run --project services/media-worker`) for Graph `createCall`. Unset URL = local loopback (not audible in Teams).
+`plane=auto` with default `listen` stays on **transcript**. Media is used only when `mode=listen_speak` (or `avatar=true`) and the worker reports `healthy=true`. Set `MEDIA_WORKER_URL` to the Windows worker (`dotnet run --project services/media-worker`). Unset URL = local loopback (not audible in Teams). Do not flip `plane=auto` to media until `docs/spike-track-b.md` is signed.
 
 ## Layout
 
@@ -27,12 +29,14 @@ packages/orchestrator  consent, state machine, plane select, tools
 packages/graph         Track A Graph adapter + VTT/JSON normaliser
 packages/summarizer    grounded xAI summaries
 apps/mcp-host          stdio + HTTP MCP server
-services/media-worker  .NET 8 Track B spike
+services/media-worker  .NET 8 Path A playPrompt worker
 deploy/teams-app       Teams manifest (calling + video enabled)
 deploy/avatars         Haitch 640×360 camera-tile still
 docs/admin-install.md
 docs/workflows.md
 docs/ops.md
+docs/spike-track-b.md  Path A decision + tenant spike table
+reviews/               peer-review PDFs
 packages/workflows     Calendar trigger + Hours draft events
 ```
 
@@ -73,12 +77,10 @@ Call `join_meeting` with demo meta:
 }
 ```
 
-Do not set `DATABASE_URL` yet — the host still uses in-memory storage; `/ready` fails if the URL is set so you do not assume persistence.
-
-Production: `ARTIFACT_ENCRYPTION_KEY`, `AZURE_*`, `GRAPH_USER_ID`, `XAI_API_KEY`. See `docs/admin-install.md`.
+Unset `DATABASE_URL` is an in-memory **single-process demo**: sessions vanish on restart and a live Graph call can be orphaned until Graph times it out. Set `DATABASE_URL` for `PgStore`. Production: `ARTIFACT_ENCRYPTION_KEY` (32 bytes after base64), `AZURE_*`, `GRAPH_USER_ID`, `XAI_API_KEY`. See `docs/admin-install.md`.
 
 ## Non-goals (v1)
 
-Video, screen share, hidden listener, browser Join automation, raw-audio persistence, ACS Call Automation as the backbone, Hours auto-commit, per-agent media farms.
+Video inbound, screen share, hidden listener, browser Join automation, raw-audio persistence, ACS Call Automation as the backbone, Hours auto-commit, per-agent media farms, `Calls.AccessMedia.All`.
 
 See `docs/admin-install.md` before any tenant install. Tenant legal review is required before production join+transcribe.

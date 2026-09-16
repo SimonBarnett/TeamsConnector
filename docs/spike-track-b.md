@@ -9,7 +9,7 @@ Consequences:
 - Day-one Graph permissions: `OnlineMeetings.Read.All`, `OnlineMeetingTranscript.Read.All`, `Calls.JoinGroupCall.All`. **Do not request `Calls.AccessMedia.All`.**
 - `plane=media` means: Graph `createCall` + `playPrompt` of a **synthesised** WAV (not silence). Hearing is Track A transcripts (`canHear` only when cues exist).
 - Do not call this “Track B application-hosted media.” Mixed-audio STT / barge-in ≤250 ms are **not** claimed on this path.
-- Default `join_meeting` mode is **listen** (Track A). `listen_speak` is explicit and fails closed with `plane_unavailable` if the worker cannot synthesise and playPrompt.
+- Default `join_meeting` mode is **listen** (Track A, `plane=auto` → transcript). `listen_speak` is explicit and fails closed with `plane_unavailable` if the worker cannot synthesise and playPrompt. Fixture speak is `played_locally` / `audibleInTeams=false`.
 
 Exit criteria from the original spike (path A restated):
 
@@ -24,16 +24,18 @@ Do **not** flip `plane=auto` to media until this report is signed.
 
 ## Tenant
 
-- Tenant id:
+- Tenant id: *(unset on the 2026-09-16 build host — no `AZURE_*`)*
 - App id:
 - Test meeting:
-- Date:
+- Date: 2026-09-16
 
 ## Results
 
+`PUBLIC_BASE_URL` must be a public HTTPS host Graph can GET (ngrok / Cloudflare tunnel), not `http://127.0.0.1`. Worker `/health.healthy` is false when that URL is loopback.
+
 | Attempt | Admitted | Heard phrase | Notes |
 |---|---|---|---|
-| 1 | | | |
+| 1 | | | 2026-09-16 — blocked: no Entra `AZURE_*` / speech key on this host; cannot admit a tenant meeting or prove humans heard `speak({text})`. |
 | 2 | | | |
 | 3 | | | |
 | 4 | | | |

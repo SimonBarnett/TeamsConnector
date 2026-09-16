@@ -43,7 +43,8 @@ export async function runDoctor(cfg: HostConfig, opts?: { graphProbe?: () => Pro
     checks.push({
       name: "postgres",
       ok: true,
-      detail: "unset — in-memory store (lost on restart). Fine for local.",
+      detail:
+        "unset — in-memory single-process demo. Sessions die on restart; a live Graph call can be orphaned until timeout. Set DATABASE_URL for PgStore.",
     });
   }
 
@@ -88,15 +89,17 @@ export async function runDoctor(cfg: HostConfig, opts?: { graphProbe?: () => Pro
       const t = setTimeout(() => ac.abort(), 3000);
       const res = await fetch(`${cfg.mediaWorkerUrl.replace(/\/$/, "")}/health`, { signal: ac.signal });
       clearTimeout(t);
-      ok = res.ok;
-      detail += ` HTTP ${res.status}`;
+      const body = (await res.json()) as { healthy?: boolean; publicBase?: string; publicLoopback?: boolean };
+      ok = res.ok && body.healthy === true;
+      detail += ` HTTP ${res.status} healthy=${body.healthy === true}`;
+      if (body.publicLoopback) detail += " PUBLIC_BASE_URL is loopback — Graph cannot GET playPrompt WAVs";
     } catch (err) {
       detail += ` (${err instanceof Error ? err.message : "unreachable"})`;
     }
     checks.push({
       name: "media",
       ok,
-      detail: `${detail}. Host uses HttpMediaWorker (Path A playPrompt). healthy=true only if worker has Graph + Azure Speech TTS.`,
+      detail: `${detail}. Host uses HttpMediaWorker (Path A createCall + playPrompt). healthy=true only if worker has Graph + Azure Speech + a public PUBLIC_BASE_URL.`,
     });
   } else {
     checks.push({

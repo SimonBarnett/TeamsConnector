@@ -474,6 +474,13 @@ describe("Orchestrator", () => {
     expect(data.participants.some((p) => p.displayName.includes("Haitch"))).toBe(true);
   });
 
+  it("shutdown leaves a live session so Graph calls are not orphaned", async () => {
+    const { orch, sessionId, store } = await speakHarness();
+    await orch.shutdown();
+    const session = await store.getSession(sessionId);
+    expect(session?.state).toBe("ended");
+  });
+
   it("ejects the Node session when the worker reports hangup", async () => {
     const { orch, sessionId, store } = await speakHarness();
     await orch.handleMediaEvent(sessionId, "ejected");

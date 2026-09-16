@@ -13,6 +13,13 @@ if (process.argv.includes("doctor") || process.env.MCP_DOCTOR === "1") {
   process.exit(report.ok ? 0 : 1);
 }
 
+function onStop(signal: string): void {
+  process.stderr.write(`${signal}: leaving live sessions\n`);
+  void orch.shutdown().finally(() => process.exit(0));
+}
+process.on("SIGINT", () => onStop("SIGINT"));
+process.on("SIGTERM", () => onStop("SIGTERM"));
+
 if (cfg.transport === "http") {
   const server = createHttpServer(orch, {
     doctor,

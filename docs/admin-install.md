@@ -1,6 +1,6 @@
 # Admin install — Teams Agent Audio Join Connector
 
-One Entra app. One Teams manifest (`deploy/teams-app/manifest.json`). The assistant **talks** by default.
+One Entra app. One Teams manifest (`deploy/teams-app/manifest.json`). Default join is **listen** (notes). Pass `mode=listen_speak` to talk.
 
 Do **not** add `Calls.*` to the existing chat-only Teams plugin. This is a separate app.
 
@@ -43,6 +43,7 @@ npm run doctor
    $env:AZURE_CLIENT_SECRET="..."
    $env:CALLBACK_URI="https://<public-host>/callback"
    $env:PUBLIC_BASE_URL="https://<public-host>"
+   # Graph fetches PUBLIC_BASE_URL/prompts/{guid}.wav — localhost is rejected (worker healthy=false).
    dotnet run --project services/media-worker --urls http://127.0.0.1:7071
    ```
 
@@ -55,9 +56,9 @@ npm run doctor
 |---|---|
 | `fixture-loopback` | No Azure creds. Demo Graph + in-process TTS. Not audible in Teams. |
 | `graph-notes-only` | Graph token works; no media worker. Assistant cannot speak into Teams. |
-| `graph-waiting-for-worker` | Graph + `MEDIA_WORKER_URL` set. Still in-process loopback until Graph `createCall` is wired on the Windows worker. |
+| `graph-waiting-for-worker` | Graph + `MEDIA_WORKER_URL` set. Host uses `HttpMediaWorker` (Path A `createCall` + `playPrompt`). Worker `healthy=true` only with Graph + Azure Speech + a **public** `PUBLIC_BASE_URL` (not localhost). |
 
-`DATABASE_URL` is **not** persistence yet. If you set it, `/ready` fails on purpose so you do not think sessions survive restart.
+Unset `DATABASE_URL` is in-memory, **single-process demo only**. Killing `npm start` after join can leave an orphan Graph call until timeout. Set `DATABASE_URL` for `PgStore`.
 
 ## Kill switch
 

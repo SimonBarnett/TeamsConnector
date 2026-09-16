@@ -2,7 +2,7 @@ export const MCP_TOOLS = [
   {
     name: "join_meeting",
     description:
-      "Join a Microsoft Teams meeting as a talking assistant. Defaults to listen_speak (can talk). Pass mode=listen for notes-only.",
+      "Join a Microsoft Teams meeting. Default mode=listen (Track A notes). Pass mode=listen_speak to talk via Path A playPrompt.",
   },
   {
     name: "get_meeting_status",
