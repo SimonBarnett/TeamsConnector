@@ -141,10 +141,17 @@ export class GraphRestClient implements GraphMeetingClient {
 
   async probeAccessPolicy(): Promise<void> {
     const user = this.defaultUserId;
-    const res = await this.graph(`/users/${encodeURIComponent(user)}/onlineMeetings?$top=1`);
-    if (!res.ok) {
-      throw new GraphHttpError(res.status, await res.text(), { collection: true });
-    }
+    // Graph forbids unfiltered GET onlineMeetings ($top=1 returns QueryOptions null).
+    // A dummy JoinWebUrl filter is enough to prove the application access policy.
+    const filter = encodeURIComponent(
+      "JoinWebUrl eq 'https://teams.microsoft.com/l/meetup-join/19:meeting_doctor_probe@thread.v2/0'",
+    );
+    const res = await this.graph(`/users/${encodeURIComponent(user)}/onlineMeetings?$filter=${filter}`);
+    if (res.ok) return;
+    const text = await res.text();
+    const err = new GraphHttpError(res.status, text);
+    if (err.connectorCode === "policy_missing") throw err;
+    // 400 "1026" / 404 item-not-found: Graph reached the meetings API; dummy JoinWebUrl is not a real meeting.
   }
 
   async resolveMeeting(input: MeetingResolveInput): Promise<MeetingRef | null> {
@@ -198,6 +205,20 @@ export class GraphRestClient implements GraphMeetingClient {
   }
 
   private async resolveByJoinUrl(user: string, meetingUrl: string): Promise<MeetingRef | null> {
+    const joinMeetingId = joinMeetingIdFromUrl(meetingUrl);
+    if (joinMeetingId) {
+      const filter = encodeURIComponent(`joinMeetingIdSettings/joinMeetingId eq '${joinMeetingId}'`);
+      const res = await this.graph(`/users/${encodeURIComponent(user)}/onlineMeetings?$filter=${filter}`);
+      if (res.ok) {
+        const json = (await res.json()) as { value?: unknown[] };
+        const first = json.value?.[0];
+        if (first) return this.toRef(first);
+      } else if (res.status === 400) {
+        await res.text();
+      } else {
+        throw new GraphHttpError(res.status, await res.text(), { collection: true });
+      }
+    }
     const normalized = normalizeJoinWebUrl(meetingUrl);
     const thread = threadIdFromJoinUrl(meetingUrl);
     const filter = encodeURIComponent(`JoinWebUrl eq '${odataString(normalized)}'`);
@@ -323,6 +344,16 @@ export class GraphRestClient implements GraphMeetingClient {
     const org = o.participants?.organizer?.identity?.user;
     if (org) ref.organizer = { id: org.id, displayName: org.displayName };
     return ref;
+  }
+}
+
+function joinMeetingIdFromUrl(raw: string): string | undefined {
+  try {
+    const path = new URL(raw).pathname;
+    const m = path.match(/\/meet\/(\d+)/i);
+    return m?.[1];
+  } catch {
+    return undefined;
   }
 }
 

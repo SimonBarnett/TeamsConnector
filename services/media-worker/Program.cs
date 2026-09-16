@@ -126,9 +126,16 @@ app.MapPost("/admit", async (AdmitRequest body) =>
     {
         return Results.Json(new { error = "joinUrl did not contain a 19: meeting thread id" }, statusCode: 400);
     }
-    var callId = await graph.CreateCallAsync(thread, body.OrganizerId, body.TenantId);
-    registry.Track(body.SessionId, callId);
-    return Results.Json(new { videoSending = false, canHear = false, callId, state = "establishing" });
+    try
+    {
+        var callId = await graph.CreateCallAsync(thread, body.OrganizerId, body.TenantId);
+        registry.Track(body.SessionId, callId);
+        return Results.Json(new { videoSending = false, canHear = false, callId, state = "establishing" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 502);
+    }
 });
 
 app.MapPost("/play", async (PlayRequest body) =>

@@ -62,22 +62,44 @@ public sealed class GraphJoinClient
                 ["messageId"] = "0",
             },
         };
+        if (!string.IsNullOrEmpty(tenantId))
+        {
+            body["tenantId"] = tenantId;
+            body["source"] = new Dictionary<string, object?>
+            {
+                ["@odata.type"] = "#microsoft.graph.participantInfo",
+                ["identity"] = new Dictionary<string, object?>
+                {
+                    ["@odata.type"] = "#microsoft.graph.identitySet",
+                    ["application"] = new Dictionary<string, object?>
+                    {
+                        ["@odata.type"] = "#microsoft.graph.identity",
+                        ["id"] = _clientId,
+                        ["displayName"] = "teams-audio-join-connector",
+                        ["tenantId"] = tenantId,
+                    },
+                },
+            };
+        }
         if (!string.IsNullOrEmpty(organizerId))
         {
+            var user = new Dictionary<string, object?>
+            {
+                ["@odata.type"] = "#microsoft.graph.identity",
+                ["id"] = organizerId,
+            };
+            if (!string.IsNullOrEmpty(tenantId)) user["tenantId"] = tenantId;
             body["meetingInfo"] = new Dictionary<string, object?>
             {
                 ["@odata.type"] = "#microsoft.graph.organizerMeetingInfo",
                 ["organizer"] = new Dictionary<string, object?>
                 {
-                    ["identity"] = new Dictionary<string, object?>
-                    {
-                        ["user"] = new Dictionary<string, object?> { ["id"] = organizerId },
-                    },
+                    ["@odata.type"] = "#microsoft.graph.identitySet",
+                    ["user"] = user,
                 },
                 ["allowConversationWithoutHost"] = true,
             };
         }
-        if (!string.IsNullOrEmpty(tenantId)) body["tenantId"] = tenantId;
 
         using var req = new HttpRequestMessage(HttpMethod.Post, "https://graph.microsoft.com/v1.0/communications/calls");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);

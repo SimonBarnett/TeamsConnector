@@ -13,20 +13,21 @@ Consequences:
 
 Exit criteria from the original spike (path A restated):
 
-- [ ] Worker joins a scheduled test meeting (`POST /communications/calls` service-hosted)
-- [ ] `speak({ text })` is heard as that text (not silence) via playPrompt
+- [x] Worker joins a scheduled test meeting (`POST /communications/calls` service-hosted) — 2026-09-16 attempt 1
+- [x] `speak({ text })` is heard as that text (not silence) via playPrompt — Simon heard `The test phrase is sunflower-42`
 - [ ] Track A transcripts when transcription is on; `canHear=false` when off
-- [ ] No WAV/PCM persisted in the Node artifact store
-- [ ] 5 consecutive joins (table below)
-- [ ] Admin consent friction written for **JoinGroupCall**, not AccessMedia
+- [x] No WAV/PCM persisted in the Node artifact store (playPrompt WAV lives in the worker with GUID + TTL)
+- [ ] 5 consecutive joins (table below) — **1 of 5**
+- [x] Admin consent friction written for **JoinGroupCall**, not AccessMedia
 
-Do **not** flip `plane=auto` to media until this report is signed.
+Do **not** flip `plane=auto` to media until this report is signed (five dated rows).
 
 ## Tenant
 
-- Tenant id: *(unset on the 2026-09-16 build host — no `AZURE_*`)*
-- App id:
-- Test meeting:
+- Tenant id: `9792d1d6-9123-4e4c-ae29-ca81bc02d3de` (MEDATECH UK LTD / medatechuk.com)
+- App id: `1c272d37-8a99-4e92-85dc-956f1d1c991d` (`teams-audio-join-connector`)
+- Azure Bot: `teams-audio-join-bot` (Teams channel, `enableCalling: true`)
+- Test meeting: `https://teams.microsoft.com/meet/338177153897024` (Simon organizer)
 - Date: 2026-09-16
 
 ## Results
@@ -35,7 +36,7 @@ Do **not** flip `plane=auto` to media until this report is signed.
 
 | Attempt | Admitted | Heard phrase | Notes |
 |---|---|---|---|
-| 1 | | | 2026-09-16 — blocked: no Entra `AZURE_*` / speech key on this host; cannot admit a tenant meeting or prove humans heard `speak({text})`. |
+| 1 | [x] | The test phrase is sunflower-42 | 2026-09-16 ~22:40 UTC. `listen_speak`. Graph GET `PUBLIC_BASE_URL/prompts/{guid}.wav` **200** (96844 bytes). Speak JSON `status=playing`, `audibleInTeams=true`. Human (Simon) confirmed heard. Tunnel `democratic-smilies-looking-iowa.trycloudflare.com`. createCall needed organizer `user.tenantId` + `source.application` (7505 without that). |
 | 2 | | | |
 | 3 | | | |
 | 4 | | | |
@@ -43,9 +44,19 @@ Do **not** flip `plane=auto` to media until this report is signed.
 
 ## Consent friction
 
-What the admin actually had to click for JoinGroupCall + transcript read.
+What the admin actually had to click for JoinGroupCall + transcript read (MEDATECH UK LTD, Simon Global Admin):
+
+1. Entra **App registrations** → `teams-audio-join-connector` (single tenant). Client secret. **Not** the chat plugin.
+2. Application permissions + **Grant admin consent**: `OnlineMeetings.Read.All`, `OnlineMeetingTranscript.Read.All`, `Calls.JoinGroupCall.All`. No `Calls.AccessMedia.All`.
+3. Teams PowerShell `New-CsApplicationAccessPolicy` / `Grant-CsApplicationAccessPolicy` on Simon’s user object id. Policy **AppIds** must be the Manifest `appId` (screenshot OCR of client id caused `policy_missing` until `Set-CsApplicationAccessPolicy`).
+4. This tenant had **zero Azure subscriptions**. Personal PAYG (`Azure subscription 1`) + Speech **Free F0** UK South for Neural TTS.
+5. Azure Bot `teams-audio-join-bot` using **existing** app id, then `az bot msteams create --enable-calling true` (portal Channels blade was blank). Until Calling was on, Graph `createCall` was **7503** not registered in store; then **7505** until createCall payload put `tenantId` on organizer user + source application.
+6. `PUBLIC_BASE_URL` / `CALLBACK_URI` must be Cloudflare/ngrok HTTPS. Loopback is rejected. Quick tunnels expire (~10h) and the hostname changes.
+
+Doctor `/ready` was green (Graph + media healthy) before the join.
 
 ## Decision
 
 - [x] Path A: playPrompt egress + Track A hear
 - [ ] Path B: application-hosted media (deferred)
+- [ ] Signed for `plane=auto` → media — **not yet** (need attempts 2–5)

@@ -23,6 +23,27 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
     ? await PgStore.connect(cfg.databaseUrl, cipher)
     : new InMemoryStore(cipher);
 
+  if (cfg.azure) {
+    await store.putTenant({
+      tenantId: cfg.azure.tenantId,
+      installedAt: nowIso(),
+      trackAConsented: true,
+      trackBConsented: cfg.mediaEnabled,
+    });
+    await store.putConnection({
+      tenantId: cfg.azure.tenantId,
+      userId: cfg.azure.graphUserId,
+      workAccountUpn: "graph-user",
+      connectedAt: nowIso(),
+      graphUserId: cfg.azure.graphUserId,
+    });
+    await store.putAck({
+      tenantId: cfg.azure.tenantId,
+      userId: cfg.azure.graphUserId,
+      acknowledgedAt: nowIso(),
+    });
+  }
+
   if (cfg.demo) {
     const tenantId = env.DEMO_TENANT_ID ?? "11111111-2222-3333-4444-555555555555";
     const userId = env.DEMO_USER_ID ?? "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";

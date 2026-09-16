@@ -169,17 +169,18 @@ describe("GraphRestClient", () => {
     await expect(boom.getParticipants("om-1")).rejects.toMatchObject({ connectorCode: "policy_missing" });
   });
 
-  it("probeAccessPolicy treats collection 404 as policy_missing", async () => {
-    const g = new GraphRestClient(tokens, "user-1", async (url) => {
-      expect(String(url)).toContain("/onlineMeetings?$top=1");
-      return json(404, { error: { message: "not found" } });
+  it("probeAccessPolicy treats access-policy 404 as policy_missing and 400 dummy-url as ok", async () => {
+    const policy = new GraphRestClient(tokens, "user-1", async (url) => {
+      expect(String(url)).toContain("/onlineMeetings?$filter=");
+      expect(String(url)).toContain("JoinWebUrl");
+      return json(404, { error: { message: "No application access policy found for this app." } });
     });
-    try {
-      await g.probeAccessPolicy();
-      expect.fail("expected throw");
-    } catch (err) {
-      expect((err as GraphHttpError).connectorCode).toBe("policy_missing");
-    }
+    await expect(policy.probeAccessPolicy()).rejects.toMatchObject({ connectorCode: "policy_missing" });
+
+    const dummy = new GraphRestClient(tokens, "user-1", async () =>
+      json(400, { error: { message: "1026: An error has occurred." } }),
+    );
+    await dummy.probeAccessPolicy();
   });
 });
 
