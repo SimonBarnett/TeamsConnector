@@ -12,13 +12,13 @@ describe("plane selection", () => {
     ).toBe("transcript");
   });
 
-  it("prefers media on auto so the assistant can talk", () => {
+  it("keeps auto+listen on transcript even if a worker is healthy (Path A freeze)", () => {
     expect(
       selectPlane(
         { mode: "listen", plane: "auto" },
-        { mediaWorkerHealthy: true, trackBConsented: false },
+        { mediaWorkerHealthy: true, trackBConsented: true },
       ),
-    ).toBe("media");
+    ).toBe("transcript");
   });
 
   it("rejects listen_speak when the media worker is down", () => {
@@ -34,7 +34,7 @@ describe("plane selection", () => {
     expect(
       selectPlane(
         { mode: "listen_speak", plane: "transcript" },
-        { mediaWorkerHealthy: true, trackBConsented: false },
+        { mediaWorkerHealthy: true, trackBConsented: true },
       ),
     ).toBe("media");
   });

@@ -98,7 +98,7 @@ export function parseHostConfig(env: NodeJS.ProcessEnv = process.env): HostConfi
     assistantDisplayName: env.ASSISTANT_DISPLAY_NAME || "Haitch (audio assistant)",
     mediaEnabled,
     workflowTrigger: env.WORKFLOW_TRIGGER === "1" || env.WORKFLOW_TRIGGER === "true",
-    pollMs: Number(env.TRANSCRIPT_POLL_MS ?? 0),
+    pollMs: Number(env.TRANSCRIPT_POLL_MS ?? (hasGraph ? 15000 : 0)),
     unknownKeys,
     mode,
   };

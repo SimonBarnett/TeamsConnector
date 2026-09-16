@@ -1,3 +1,4 @@
+import { PgStore } from "@teams-audio-join/store";
 import type { HostConfig } from "./env.ts";
 
 export interface DoctorCheck {
@@ -27,10 +28,11 @@ export async function runDoctor(cfg: HostConfig, opts?: { graphProbe?: () => Pro
   });
 
   if (cfg.databaseUrl) {
+    const up = await PgStore.ping(cfg.databaseUrl);
     checks.push({
       name: "postgres",
-      ok: false,
-      detail: "DATABASE_URL is set but this host still uses in-memory store. Unset DATABASE_URL or sessions will not persist despite the URL.",
+      ok: up,
+      detail: up ? "DATABASE_URL reachable — PgStore" : "DATABASE_URL set but SELECT 1 failed",
     });
   } else {
     checks.push({
@@ -87,7 +89,7 @@ export async function runDoctor(cfg: HostConfig, opts?: { graphProbe?: () => Pro
     checks.push({
       name: "media",
       ok,
-      detail: `${detail}. Remote worker URL is probed; this host still uses in-process loopback until Graph createCall is wired.`,
+      detail: `${detail}. Host uses HttpMediaWorker (Path A playPrompt). healthy=true only if worker has Graph + Azure Speech TTS.`,
     });
   } else {
     checks.push({

@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { MCP_TOOLS, type Envelope } from "@teams-audio-join/shared";
+import { listedMcpTools, type Envelope } from "@teams-audio-join/shared";
 import type { Orchestrator } from "@teams-audio-join/orchestrator";
 import type { DoctorReport } from "./doctor.ts";
 
@@ -98,11 +98,7 @@ export async function handleRpc(orch: Orchestrator, msg: JsonRpcReq): Promise<un
       jsonrpc: "2.0",
       id,
       result: {
-        tools: MCP_TOOLS.map((t) => ({
-          name: t.name,
-          description: t.description,
-          inputSchema: { type: "object", additionalProperties: true },
-        })),
+        tools: listedMcpTools(),
       },
     };
   }
@@ -181,7 +177,7 @@ document.getElementById("list").onclick = () => rpc("tools/list");
 document.getElementById("join").onclick = async () => {
   const json = await rpc("tools/call", {
     name: "join_meeting",
-    arguments: { onlineMeetingId: "om-priority", announce: false },
+    arguments: { onlineMeetingId: "om-priority", mode: "listen_speak", announce: false },
     meta
   });
   try {
@@ -252,19 +248,48 @@ document.getElementById("speak").onclick = () => {
   });
 }
 
+function writeStdioFrame(msg: unknown): void {
+  const json = Buffer.from(JSON.stringify(msg), "utf8");
+  process.stdout.write(`Content-Length: ${json.length}\r\n\r\n`);
+  process.stdout.write(json);
+}
+
 export async function serveStdio(orch: Orchestrator): Promise<void> {
-  const { createInterface } = await import("node:readline");
-  const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
-  for await (const line of rl) {
-    if (!line.trim()) continue;
-    try {
-      const msg = JSON.parse(line) as JsonRpcReq;
-      const out = await handleRpc(orch, msg);
-      process.stdout.write(`${JSON.stringify(out)}\n`);
-    } catch (err) {
-      process.stdout.write(
-        `${JSON.stringify({ jsonrpc: "2.0", error: { code: -32700, message: err instanceof Error ? err.message : "parse" } })}\n`,
-      );
+  let buf = Buffer.alloc(0);
+  process.stdin.on("data", (chunk: Buffer) => {
+    buf = Buffer.concat([buf, chunk]);
+    void drainStdio(orch);
+  });
+  await new Promise<void>((resolve) => {
+    process.stdin.on("end", () => resolve());
+    process.stdin.resume();
+  });
+
+  async function drainStdio(o: Orchestrator): Promise<void> {
+    while (true) {
+      const headerEnd = buf.indexOf("\r\n\r\n");
+      if (headerEnd < 0) return;
+      const header = buf.subarray(0, headerEnd).toString("utf8");
+      const m = header.match(/Content-Length:\s*(\d+)/i);
+      if (!m) {
+        buf = buf.subarray(headerEnd + 4);
+        writeStdioFrame({ jsonrpc: "2.0", error: { code: -32700, message: "missing Content-Length" } });
+        continue;
+      }
+      const len = Number(m[1]);
+      const start = headerEnd + 4;
+      if (buf.length < start + len) return;
+      const body = buf.subarray(start, start + len).toString("utf8");
+      buf = buf.subarray(start + len);
+      try {
+        const msg = JSON.parse(body) as JsonRpcReq;
+        writeStdioFrame(await handleRpc(o, msg));
+      } catch (err) {
+        writeStdioFrame({
+          jsonrpc: "2.0",
+          error: { code: -32700, message: err instanceof Error ? err.message : "parse" },
+        });
+      }
     }
   }
 }

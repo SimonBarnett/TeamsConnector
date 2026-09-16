@@ -14,6 +14,10 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@teams-audio-join/shared": "1.2.0"
+    "@teams-audio-join/shared": "1.2.0",
+    "pg": "^8.14.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.11"
   }
 }

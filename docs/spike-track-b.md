@@ -1,14 +1,24 @@
-# Track B spike report (template)
+# Track B / egress decision (P0-A3)
 
-Exit criteria from the build spec:
+**Choice: Path A — service-hosted Graph `playPrompt` for egress, Track A official transcripts for hearing.**
 
-- [ ] .NET media bot joins a scheduled test meeting (`POST /communications/calls`)
-- [ ] Mixed audio streamed to STT in memory (ring buffer ≤ 10s)
-- [ ] No speak / TTS in the Phase 0 spike; Phase 2 adds policy-gated TTS on the same worker
-- [ ] No WAV/PCM/Opus persistence
-- [ ] Optional: send-only still avatar (no inbound video sockets)
-- [ ] 5 consecutive joins in the test tenant
-- [ ] Written go/no-go on admin-consent friction for `Calls.AccessMedia.All`
+We are **not** implementing application-hosted media (`Calls.AccessMedia.All`, RTP sockets, mixed-audio STT) in this iteration. Microsoft’s current guidance treats application-hosted media bots as a poor default for AI agents. Path A matches what `GraphJoin.cs` already posts (`#microsoft.graph.serviceHostedMediaConfig`).
+
+Consequences:
+
+- Day-one Graph permissions: `OnlineMeetings.Read.All`, `OnlineMeetingTranscript.Read.All`, `Calls.JoinGroupCall.All`. **Do not request `Calls.AccessMedia.All`.**
+- `plane=media` means: Graph `createCall` + `playPrompt` of a **synthesised** WAV (not silence). Hearing is Track A transcripts (`canHear` only when cues exist).
+- Do not call this “Track B application-hosted media.” Mixed-audio STT / barge-in ≤250 ms are **not** claimed on this path.
+- Default `join_meeting` mode is **listen** (Track A). `listen_speak` is explicit and fails closed with `plane_unavailable` if the worker cannot synthesise and playPrompt.
+
+Exit criteria from the original spike (path A restated):
+
+- [ ] Worker joins a scheduled test meeting (`POST /communications/calls` service-hosted)
+- [ ] `speak({ text })` is heard as that text (not silence) via playPrompt
+- [ ] Track A transcripts when transcription is on; `canHear=false` when off
+- [ ] No WAV/PCM persisted in the Node artifact store
+- [ ] 5 consecutive joins (table below)
+- [ ] Admin consent friction written for **JoinGroupCall**, not AccessMedia
 
 Do **not** flip `plane=auto` to media until this report is signed.
 
@@ -21,7 +31,7 @@ Do **not** flip `plane=auto` to media until this report is signed.
 
 ## Results
 
-| Attempt | Admitted | STT partials | Notes |
+| Attempt | Admitted | Heard phrase | Notes |
 |---|---|---|---|
 | 1 | | | |
 | 2 | | | |
@@ -31,9 +41,9 @@ Do **not** flip `plane=auto` to media until this report is signed.
 
 ## Consent friction
 
-What the admin actually had to click, and whether RSC meeting-scoped permissions were enough.
+What the admin actually had to click for JoinGroupCall + transcript read.
 
 ## Decision
 
-- [ ] Stay on Track A only
-- [ ] Enable Track B behind a tenant flag
+- [x] Path A: playPrompt egress + Track A hear
+- [ ] Path B: application-hosted media (deferred)

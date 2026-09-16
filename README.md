@@ -6,7 +6,7 @@ This repository implements build spec v1.2 plus OpenAPI 1.5.0 at `contracts/team
 
 ## What v1 does
 
-- Default join is `listen_speak` on the media plane so the assistant can talk. `mode=listen` is notes-only.
+- Default join is **listen** (Track A official transcripts). `mode=listen_speak` is explicit Path A Graph `playPrompt` (not application-hosted media).
 - Seven MCP tools: `join_meeting`, `get_meeting_status`, `get_transcript`, `speak`, `cancel_speech`, `request_summary`, `leave_meeting`.
 - Honest deaf-state: `canHear=false` when transcription is off. Summaries never invent a meeting from the title.
 - Speaks by default (`mode=listen_speak`, media plane). `speak()` upgrades a notes-only session when the media worker is up. Caps, content filter, and barge-in still apply.

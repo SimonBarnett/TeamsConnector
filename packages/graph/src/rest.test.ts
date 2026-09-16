@@ -58,6 +58,19 @@ describe("GraphRestClient", () => {
     });
     const list = await g.listTranscripts("om-1");
     expect(list[0]?.id).toBe("tr-1");
-    expect(await g.getTranscriptContent({ id: "tr-1" })).toContain("WEBVTT");
+    expect(list[0]?.onlineMeetingId).toBe("om-1");
+    const content = await g.getTranscriptContent({ id: "tr-1", onlineMeetingId: "om-1" });
+    expect(content).toContain("WEBVTT");
+  });
+
+  it("transcript content URL includes the meeting id", async () => {
+    const seen: string[] = [];
+    const g = new GraphRestClient(tokens, "user-1", async (url) => {
+      seen.push(String(url));
+      return new Response("WEBVTT", { status: 200 });
+    });
+    await g.getTranscriptContent({ id: "tr-9", onlineMeetingId: "om-42" });
+    expect(seen[0]).toContain("/onlineMeetings/om-42/transcripts/tr-9/content");
+    expect(seen[0]).not.toMatch(/onlineMeetings\/transcripts\//);
   });
 });

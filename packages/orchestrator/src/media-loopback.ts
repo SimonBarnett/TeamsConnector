@@ -74,7 +74,7 @@ export class LoopbackMediaWorker implements MediaWorker {
       throw new Error("media worker crash");
     }
     this.sessions.set(sessionId, { muted: false });
-    return { videoSending: opts.avatar, canHear: true };
+    return { videoSending: opts.avatar, canHear: false };
   }
 
   async play(sessionId: string, cmd: PlayCommand): Promise<{ status: "playing" | "queued" }> {

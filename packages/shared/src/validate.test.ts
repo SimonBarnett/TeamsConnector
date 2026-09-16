@@ -18,10 +18,10 @@ import {
 const TENANT = "11111111-2222-3333-4444-555555555555";
 
 describe("validateJoinMeeting", () => {
-  it("defaults to listen_speak and announce true", () => {
+  it("defaults to listen and announce false (Track A freeze)", () => {
     const req = validateJoinMeeting({ onlineMeetingId: "om-1" });
-    expect(req.mode).toBe("listen_speak");
-    expect(req.announce).toBe(true);
+    expect(req.mode).toBe("listen");
+    expect(req.announce).toBe(false);
     expect(req.plane).toBe("auto");
   });
 

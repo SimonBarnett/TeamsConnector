@@ -1,4 +1,4 @@
-import { InMemoryStore, EnvelopeCipher } from "@teams-audio-join/store";
+import { InMemoryStore, EnvelopeCipher, PgStore } from "@teams-audio-join/store";
 import { Orchestrator, MemoryEventSink, WebhookEventSink, LoopbackMediaWorker, UnavailableMediaWorker, HttpMediaWorker } from "@teams-audio-join/orchestrator";
 import { FakeGraphClient, fixtureCatchup, GraphRestClient, ClientCredentialsTokenProvider } from "@teams-audio-join/graph";
 import { FixtureLlmClient, XaiLlmClient, type LlmClient } from "@teams-audio-join/summarizer";
@@ -18,7 +18,10 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
   const cfg = parseHostConfig(env);
   assertHostConfig(cfg);
 
-  const store = new InMemoryStore(EnvelopeCipher.fromEnv(cfg.encryptionKey));
+  const cipher = EnvelopeCipher.fromEnv(cfg.encryptionKey);
+  const store = cfg.databaseUrl
+    ? await PgStore.connect(cfg.databaseUrl, cipher)
+    : new InMemoryStore(cipher);
 
   if (cfg.demo) {
     const tenantId = env.DEMO_TENANT_ID ?? "11111111-2222-3333-4444-555555555555";
@@ -89,6 +92,7 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
     mediaWorker,
     assistantDisplayName: cfg.assistantDisplayName,
     pollMs: cfg.pollMs,
+    audibleInTeams: mediaWorker instanceof HttpMediaWorker,
   });
 
   if (cfg.workflowTrigger) {
@@ -129,8 +133,8 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
     `teams-audio-join mode=${cfg.mode}`,
     cfg.mode === "fixture-loopback" ? "speak() is local loopback; Teams attendees will not hear it" : "",
     cfg.mode === "graph-notes-only" ? "Graph is live; media worker missing — assistant cannot speak into Teams" : "",
-    cfg.mode === "graph-waiting-for-worker" ? `Graph is live; MEDIA_WORKER_URL=${cfg.mediaWorkerUrl} (in-process loopback until createCall is wired)` : "",
-    cfg.databaseUrl ? "WARNING: DATABASE_URL is set but store is still in-memory" : "store=memory",
+    cfg.mode === "graph-waiting-for-worker" ? `Graph is live; HttpMediaWorker → ${cfg.mediaWorkerUrl} (Path A playPrompt)` : "",
+    cfg.databaseUrl ? "store=postgres" : "store=memory",
     `summarizer=${cfg.xaiKey ? "xai" : "fixture"}`,
   ]
     .filter(Boolean)

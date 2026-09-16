@@ -11,18 +11,29 @@ var callback = Environment.GetEnvironmentVariable("CALLBACK_URI")
     ?? Environment.GetEnvironmentVariable("MEDIA_CALLBACK_URI")
     ?? "https://localhost/callback";
 var publicBase = Environment.GetEnvironmentVariable("PUBLIC_BASE_URL") ?? "";
+var speechKey = Environment.GetEnvironmentVariable("AZURE_SPEECH_KEY") ?? "";
+var speechRegion = Environment.GetEnvironmentVariable("AZURE_SPEECH_REGION") ?? "uksouth";
 
 GraphJoinClient? graph = string.IsNullOrWhiteSpace(tenant) || string.IsNullOrWhiteSpace(clientId)
     ? null
     : new GraphJoinClient(tenant, clientId, clientSecret, callback);
+AzureTts? tts = string.IsNullOrWhiteSpace(speechKey) ? null : new AzureTts(speechKey, speechRegion);
 
 var calls = new ConcurrentDictionary<string, string>();
 var prompts = new ConcurrentDictionary<string, byte[]>();
 
 app.MapGet("/health", () =>
 {
-    var configured = graph is not null;
-    return Results.Json(new { healthy = configured, plane = "media", graph = configured, callback });
+    var configured = graph is not null && tts is not null;
+    return Results.Json(new
+    {
+        healthy = configured,
+        plane = "media",
+        graph = graph is not null,
+        tts = tts is not null,
+        path = "A-playPrompt",
+        callback,
+    });
 });
 
 app.MapPost("/callback", async (HttpRequest req) =>
@@ -42,7 +53,7 @@ app.MapPost("/admit", async (AdmitRequest body) =>
     }
     var callId = await graph.CreateCallAsync(thread, body.OrganizerId, body.TenantId);
     calls[body.SessionId] = callId;
-    return Results.Json(new { videoSending = false, canHear = true, callId });
+    return Results.Json(new { videoSending = false, canHear = false, callId });
 });
 
 app.MapPost("/play", async (PlayRequest body) =>
@@ -51,13 +62,30 @@ app.MapPost("/play", async (PlayRequest body) =>
     {
         return Results.Json(new { error = "session not in a Graph call" }, statusCode: 404);
     }
-    if (!string.IsNullOrEmpty(publicBase))
+    if (tts is null)
     {
-        var wav = Pcm16ToWav(SilencePcm(body.DurationMs <= 0 ? 800 : body.DurationMs));
-        prompts[body.UtteranceId] = wav;
-        var uri = $"{publicBase.TrimEnd('/')}/prompts/{body.UtteranceId}.wav";
-        await graph.PlayPromptAsync(callId, uri);
+        return Results.Json(new { error = "AZURE_SPEECH_KEY is required; refusing to play silence" }, statusCode: 503);
     }
+    if (string.IsNullOrWhiteSpace(publicBase))
+    {
+        return Results.Json(new { error = "PUBLIC_BASE_URL is required for playPrompt" }, statusCode: 503);
+    }
+    byte[] wav;
+    try
+    {
+        wav = await tts.SynthesizeWavAsync(body.Text);
+    }
+    catch (Exception ex)
+    {
+        return Results.Json(new { error = ex.Message }, statusCode: 503);
+    }
+    if (AzureTts.IsSilentPcm(wav))
+    {
+        return Results.Json(new { error = "refusing silent WAV" }, statusCode: 503);
+    }
+    prompts[body.UtteranceId] = wav;
+    var uri = $"{publicBase.TrimEnd('/')}/prompts/{Uri.EscapeDataString(body.UtteranceId)}.wav";
+    await graph.PlayPromptAsync(callId, uri);
     return Results.Json(new { status = "playing" });
 });
 
@@ -79,32 +107,6 @@ app.MapPost("/leave", async (SessionBody body) =>
 });
 
 app.Run();
-
-static byte[] SilencePcm(int durationMs)
-{
-    var samples = 16000 * durationMs / 1000;
-    return new byte[Math.Max(samples, 1) * 2];
-}
-
-static byte[] Pcm16ToWav(byte[] pcm)
-{
-    using var ms = new MemoryStream();
-    using var bw = new BinaryWriter(ms);
-    bw.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
-    bw.Write(36 + pcm.Length);
-    bw.Write(System.Text.Encoding.ASCII.GetBytes("WAVEfmt "));
-    bw.Write(16);
-    bw.Write((short)1);
-    bw.Write((short)1);
-    bw.Write(16000);
-    bw.Write(16000 * 2);
-    bw.Write((short)2);
-    bw.Write((short)16);
-    bw.Write(System.Text.Encoding.ASCII.GetBytes("data"));
-    bw.Write(pcm.Length);
-    bw.Write(pcm);
-    return ms.ToArray();
-}
 
 public sealed record AdmitRequest(
     string SessionId,

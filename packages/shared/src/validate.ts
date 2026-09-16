@@ -125,11 +125,11 @@ export function validateJoinMeeting(raw: unknown): JoinMeetingRequest {
     "avatar",
   ], "join_meeting");
   const req: JoinMeetingRequest = {
-    mode: optOneOf(obj, "mode", MODES) ?? "listen_speak",
+    mode: optOneOf(obj, "mode", MODES) ?? "listen",
     meetingUrl: optString(obj, "meetingUrl", 2048),
     eventId: optString(obj, "eventId", 256),
     onlineMeetingId: optString(obj, "onlineMeetingId", 256),
-    announce: optBool(obj, "announce") ?? true,
+    announce: optBool(obj, "announce") ?? false,
     plane: optOneOf(obj, "plane", PLANE_REQUESTS) ?? "auto",
     locale: optString(obj, "locale", 32),
     waitForAdmitSec: optInt(obj, "waitForAdmitSec", 15, 180) ?? 60,

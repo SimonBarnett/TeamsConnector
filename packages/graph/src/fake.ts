@@ -37,7 +37,11 @@ export class FakeGraphClient implements GraphMeetingClient {
   async listTranscripts(onlineMeetingId: string): Promise<GraphTranscriptRef[]> {
     if (!this.transcriptionEnabled) return [];
     const m = this.meetings.find((x) => x.meeting.onlineMeetingId === onlineMeetingId);
-    return (m?.transcripts ?? []).map((t) => ({ id: t.id, contentUrl: t.id }));
+    return (m?.transcripts ?? []).map((t) => ({
+      id: t.id,
+      onlineMeetingId,
+      contentUrl: t.id,
+    }));
   }
 
   async getTranscriptContent(ref: GraphTranscriptRef): Promise<string> {

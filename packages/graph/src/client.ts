@@ -2,6 +2,7 @@ import type { MeetingRef, Participant } from "@teams-audio-join/shared";
 
 export interface GraphTranscriptRef {
   id: string;
+  onlineMeetingId?: string;
   createdDateTime?: string;
   contentUrl?: string;
 }

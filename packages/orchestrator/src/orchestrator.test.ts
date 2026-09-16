@@ -259,6 +259,7 @@ describe("Orchestrator", () => {
     expect(spoken.ok).toBe(true);
     if (!spoken.ok) return;
     expect((spoken.data as { status: string }).status).toBe("playing");
+    expect((spoken.data as { audibleInTeams?: boolean }).audibleInTeams).toBeFalsy();
     const status = await orch.call("get_meeting_status", { sessionId }, testMeta());
     if (!status.ok) return;
     expect((status.data as { mode: string; capabilities: { canSpeak: boolean } }).mode).toBe("listen_speak");

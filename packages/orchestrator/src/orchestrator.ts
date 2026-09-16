@@ -81,6 +81,7 @@ export interface OrchestratorOptions {
   speakCooldownMs?: number;
   metrics?: Metrics;
   pollMs?: number;
+  audibleInTeams?: boolean;
 }
 
 export class Orchestrator {
@@ -95,6 +96,7 @@ export class Orchestrator {
   private readonly speakCooldownMs: number;
   readonly metrics: Metrics;
   private readonly pollMs: number;
+  private readonly audibleInTeams: boolean;
   private readonly pollers = new Map<string, ReturnType<typeof setInterval>>();
   private readonly rejoined = new Set<string>();
   private readonly summaryMeta = new Map<string, { count: number; lastAt: number; last?: Artifact }>();
@@ -112,6 +114,7 @@ export class Orchestrator {
     this.speakCooldownMs = opts.speakCooldownMs ?? SPEAK_COOLDOWN_MS;
     this.metrics = opts.metrics ?? new Metrics();
     this.pollMs = opts.pollMs ?? 0;
+    this.audibleInTeams = Boolean(opts.audibleInTeams);
   }
 
   async call(tool: string, args: unknown, rawMeta: unknown): Promise<Envelope<unknown>> {
@@ -379,11 +382,19 @@ export class Orchestrator {
         return ok({ utteranceId, status: "queued", estimatedDurationMs: durationMs }, meta.requestId);
       }
     } catch {
-      return reject("speak_rejected", "Media worker refused the utterance.");
+      return reject("plane_unavailable", "Media worker could not synthesise or playPrompt the utterance.");
     }
 
     await this.markPlaying(session, utteranceId, req.text, priority, allowBargeIn, durationMs);
-    return ok({ utteranceId, status: "playing", estimatedDurationMs: durationMs }, meta.requestId);
+    return ok(
+      {
+        utteranceId,
+        status: "playing",
+        estimatedDurationMs: durationMs,
+        audibleInTeams: this.audibleInTeams,
+      },
+      meta.requestId,
+    );
   }
 
   async cancelSpeech(meta: CallMeta, raw: unknown): Promise<Envelope<CancelSpeechResponse>> {
@@ -723,6 +734,7 @@ export class Orchestrator {
       resumed,
       meeting: session.meeting,
       capabilities: session.capabilities,
+      audibleInTeams: this.audibleInTeams && session.plane === "media" && session.mode === "listen_speak",
     };
   }
 

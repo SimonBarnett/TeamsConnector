@@ -172,6 +172,7 @@ export interface JoinMeetingResponse {
   resumed?: boolean;
   meeting: MeetingRef;
   capabilities: Capabilities;
+  audibleInTeams?: boolean;
 }
 
 export interface SessionRequest {
@@ -222,6 +223,8 @@ export interface SpeakResponse {
   reason?: string;
   estimatedDurationMs?: number;
   error?: ConnectorErrorBody;
+  /** False for fixture loopback. True only after Graph playPrompt of synthesised audio. */
+  audibleInTeams?: boolean;
 }
 
 export interface CancelSpeechRequest {

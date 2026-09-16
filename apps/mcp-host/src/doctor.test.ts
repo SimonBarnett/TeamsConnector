@@ -10,7 +10,7 @@ describe("runDoctor", () => {
     expect(formatDoctor(report)).toContain("mode=fixture-loopback");
   });
 
-  it("fails ready when DATABASE_URL is set (store is still memory)", async () => {
+  it("fails ready when DATABASE_URL is set but Postgres is unreachable", async () => {
     const report = await runDoctor(parseHostConfig({ NODE_ENV: "test", DATABASE_URL: "postgres://x" }));
     expect(report.ok).toBe(false);
     expect(report.checks.find((c) => c.name === "postgres")?.ok).toBe(false);

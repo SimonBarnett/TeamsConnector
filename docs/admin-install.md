@@ -24,8 +24,7 @@ npm run doctor
 3. Admin-consent application permissions:
    - `OnlineMeetings.Read.All`
    - `OnlineMeetingTranscript.Read.All`
-   - `Calls.JoinGroupCall.All`
-   - `Calls.AccessMedia.All` (required to be heard in the meeting)
+   - `Calls.JoinGroupCall.All` (Path A playPrompt egress; **not** `Calls.AccessMedia.All`)
 4. Prefer RSC `OnlineMeetingTranscript.Read.Chat` when the bot is in a specific meeting chat.
 5. **Application access policy** — without this, Graph returns 404 and the connector reports `meeting_not_found`:
 

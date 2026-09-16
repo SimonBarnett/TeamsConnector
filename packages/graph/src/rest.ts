@@ -126,19 +126,30 @@ export class GraphRestClient implements GraphMeetingClient {
     );
     if (res.status === 404) return [];
     if (!res.ok) throw new Error(`graph ${res.status}`);
-    const json = (await res.json()) as { value?: { id: string; createdDateTime?: string }[] };
-    return json.value ?? [];
+    const json = (await res.json()) as {
+      value?: { id: string; createdDateTime?: string; transcriptContentUrl?: string }[];
+    };
+    return (json.value ?? []).map((t) => ({
+      id: t.id,
+      onlineMeetingId,
+      createdDateTime: t.createdDateTime,
+      contentUrl: t.transcriptContentUrl,
+    }));
   }
 
   async getTranscriptContent(ref: GraphTranscriptRef, graphUserId?: string): Promise<string> {
     const user = graphUserId ?? this.defaultUserId;
+    const omId = ref.onlineMeetingId;
+    if (!ref.contentUrl && !omId) {
+      throw new Error("transcript content requires onlineMeetingId or contentUrl");
+    }
     const path = ref.contentUrl
       ? undefined
-      : `/users/${encodeURIComponent(user)}/onlineMeetings/transcripts/${encodeURIComponent(ref.id)}/content`;
+      : `/users/${encodeURIComponent(user)}/onlineMeetings/${encodeURIComponent(omId!)}/transcripts/${encodeURIComponent(ref.id)}/content?$format=text/vtt`;
     const token = await this.tokens.getToken();
     const url = ref.contentUrl ?? `https://graph.microsoft.com/v1.0${path}`;
     const res = await this.fetchImpl(url, {
-      headers: { authorization: `Bearer ${token}`, accept: "text/vtt, application/json" },
+      headers: { authorization: `Bearer ${token}`, accept: "text/vtt" },
     });
     if (!res.ok) throw new Error(`graph content ${res.status}`);
     return res.text();

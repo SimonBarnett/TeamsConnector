@@ -12,6 +12,9 @@ describe("MCP host", () => {
       result: { tools: { name: string }[] };
     };
     const names = listed.result.tools.map((t) => t.name);
+    expect(listed.result.tools.find((t) => t.name === "speak")?.inputSchema).toMatchObject({
+      required: ["sessionId", "text"],
+    });
     expect(names).toEqual([
       "join_meeting",
       "get_meeting_status",
@@ -32,7 +35,7 @@ describe("MCP host", () => {
       method: "tools/call",
       params: {
         name: "join_meeting",
-        arguments: { onlineMeetingId: "om-priority", announce: false },
+        arguments: { onlineMeetingId: "om-priority", mode: "listen_speak", announce: false },
         meta: {
           tenantId: "11111111-2222-3333-4444-555555555555",
           userId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",

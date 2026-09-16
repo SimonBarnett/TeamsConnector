@@ -55,7 +55,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   participants_json TEXT NOT NULL,
   last_error_json TEXT,
   speak_json TEXT NOT NULL,
-  last_artifact_id TEXT
+  last_artifact_id TEXT,
+  avatar BOOLEAN NOT NULL DEFAULT FALSE,
+  video_json TEXT
 );
 
 CREATE INDEX IF NOT EXISTS sessions_user_live ON sessions (tenant_id, user_id, state);

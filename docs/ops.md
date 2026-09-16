@@ -2,7 +2,7 @@
 
 ## Persistence
 
-Do **not** set `DATABASE_URL` on this build. The host is in-memory; `/ready` fails if the URL is set. Production must set `ARTIFACT_ENCRYPTION_KEY` (32-byte base64). Transcripts and artifacts TTL default **14 days** when a persistent store exists; the audit log is not swept.
+Set `DATABASE_URL` to use `PgStore` (docker compose postgres:16). `/ready` postgres is green only after `SELECT 1` succeeds. Unset URL = in-memory. Production must set `ARTIFACT_ENCRYPTION_KEY` (32-byte base64). TTL default 14 days; audit is not swept.
 
 `GET /ready` is the install doctor (`npm run doctor`). `GET /health` is liveness only.
 
