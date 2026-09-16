@@ -6,7 +6,8 @@ describe("error codes", () => {
   it("covers the OpenAPI ErrorCode enum", () => {
     expect(ERROR_CODES).toContain("unauthenticated");
     expect(ERROR_CODES).toContain("rate_limited");
-    expect(ERROR_CODES).toHaveLength(17);
+    expect(ERROR_CODES).toContain("policy_missing");
+    expect(ERROR_CODES).toHaveLength(18);
   });
 
   it("marks only the spec-retryable codes as retryable", () => {

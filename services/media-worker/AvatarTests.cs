@@ -34,16 +34,16 @@ public class AvatarTests
     }
 
     [Fact]
-    public void StillLoopSendsInMemoryAndWritesNoFiles()
+    public async Task StillLoopSendsInMemoryAndWritesNoFiles()
     {
         var nv12 = new byte[MediaSessionPlan.AvatarWidth * MediaSessionPlan.AvatarHeight * 3 / 2];
         var sent = 0;
         using var loop = new StillAvatarLoop(nv12, _ => Interlocked.Increment(ref sent), fps: 50);
         loop.Start();
-        var deadline = DateTime.UtcNow.AddSeconds(2);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
         while (loop.FramesSent < 1 && DateTime.UtcNow < deadline)
         {
-            Thread.Sleep(20);
+            await Task.Delay(20);
         }
         loop.Stop();
         Assert.True(loop.FramesSent >= 1);

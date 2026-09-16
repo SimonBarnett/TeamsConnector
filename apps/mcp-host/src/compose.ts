@@ -1,6 +1,6 @@
 import { InMemoryStore, EnvelopeCipher, PgStore } from "@teams-audio-join/store";
 import { Orchestrator, MemoryEventSink, WebhookEventSink, LoopbackMediaWorker, UnavailableMediaWorker, HttpMediaWorker } from "@teams-audio-join/orchestrator";
-import { FakeGraphClient, fixtureCatchup, GraphRestClient, ClientCredentialsTokenProvider } from "@teams-audio-join/graph";
+import { FakeGraphClient, fixtureCatchup, GraphRestClient, ClientCredentialsTokenProvider, ClientCertificateTokenProvider, GraphHttpError } from "@teams-audio-join/graph";
 import { FixtureLlmClient, XaiLlmClient, type LlmClient } from "@teams-audio-join/summarizer";
 import { nowIso } from "@teams-audio-join/shared";
 import { CalendarTrigger, FakeCalendar, HttpCalendarPort } from "@teams-audio-join/workflows";
@@ -45,15 +45,21 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
     });
   }
 
-  const graph = cfg.azure
-    ? new GraphRestClient(
-        new ClientCredentialsTokenProvider({
+  const graphTokens = cfg.azure
+    ? cfg.azure.clientCertificate
+      ? new ClientCertificateTokenProvider({
           tenantId: cfg.azure.tenantId,
           clientId: cfg.azure.clientId,
-          clientSecret: cfg.azure.clientSecret,
-        }),
-        cfg.azure.graphUserId,
-      )
+          certificate: cfg.azure.clientCertificate,
+        })
+      : new ClientCredentialsTokenProvider({
+          tenantId: cfg.azure.tenantId,
+          clientId: cfg.azure.clientId,
+          clientSecret: cfg.azure.clientSecret ?? "",
+        })
+    : undefined;
+  const graph = graphTokens
+    ? new GraphRestClient(graphTokens, cfg.azure!.graphUserId)
     : new FakeGraphClient([fixtureCatchup()]);
 
   let llm: LlmClient;
@@ -79,7 +85,7 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
   const mediaWorker = !cfg.mediaEnabled
     ? new UnavailableMediaWorker()
     : cfg.mediaWorkerUrl
-      ? new HttpMediaWorker(cfg.mediaWorkerUrl)
+      ? new HttpMediaWorker(cfg.mediaWorkerUrl, fetch, cfg.mediaWorkerSecret)
       : cfg.mode === "graph-notes-only"
         ? new UnavailableMediaWorker()
         : new LoopbackMediaWorker();
@@ -116,15 +122,18 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
 
   const doctor = () =>
     runDoctor(cfg, {
-      graphProbe: cfg.azure
+      graphProbe: cfg.azure && graphTokens
         ? async () => {
-            const tok = new ClientCredentialsTokenProvider({
-              tenantId: cfg.azure!.tenantId,
-              clientId: cfg.azure!.clientId,
-              clientSecret: cfg.azure!.clientSecret,
-            });
-            const token = await tok.getToken();
-            return token.length > 0;
+            const client = new GraphRestClient(graphTokens, cfg.azure!.graphUserId);
+            try {
+              await client.probeAccessPolicy();
+              return true;
+            } catch (err) {
+              if (err instanceof GraphHttpError) {
+                throw new Error(`${err.connectorCode}: ${err.message}`);
+              }
+              throw err;
+            }
           }
         : undefined,
     });

@@ -26,7 +26,7 @@ npm run doctor
    - `OnlineMeetingTranscript.Read.All`
    - `Calls.JoinGroupCall.All` (Path A playPrompt egress; **not** `Calls.AccessMedia.All`)
 4. Prefer RSC `OnlineMeetingTranscript.Read.Chat` when the bot is in a specific meeting chat.
-5. **Application access policy** — without this, Graph returns 404 and the connector reports `meeting_not_found`:
+5. **Application access policy** — without this, Graph returns 403/404 and the connector reports `policy_missing` (not `meeting_not_found`). Doctor probes `GET /users/{GRAPH_USER_ID}/onlineMeetings?$top=1`.
 
    ```powershell
    New-CsApplicationAccessPolicy -Identity "teams-audio-join-policy" -AppIds "<APP_ID>"

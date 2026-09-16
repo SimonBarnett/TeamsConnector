@@ -29,16 +29,19 @@ export interface GraphMeetingClient {
 /**
  * Application-only OnlineMeetings.Read.All requires an application access policy
  * granted to the connecting user (or a service mailbox). Without it Graph returns
- * 404, which this connector maps to meeting_not_found — not a silent empty roster.
+ * 404, which this connector maps to policy_missing — not meeting_not_found.
  *
  * GET /users/{id}/onlineMeetings?$filter=JoinWebUrl eq '{url}'
  * GET /users/{id}/onlineMeetings/{id}
+ * GET /users/{id}/onlineMeetings/{id}/attendanceReports
  * GET /users/{id}/onlineMeetings/{id}/transcripts
- * GET …/transcripts/{tid}/content
+ * GET /users/{id}/onlineMeetings/{id}/transcripts/{tid}/content
  */
 export const GRAPH_TRACK_A_OPS = [
   "GET /users/{id}/onlineMeetings?$filter=JoinWebUrl eq '{url}'",
   "GET /users/{id}/onlineMeetings/{id}",
+  "GET /users/{id}/onlineMeetings/{id}/attendanceReports",
+  "GET /users/{id}/onlineMeetings/{id}/attendanceReports/{rid}/attendanceRecords",
   "GET /users/{id}/onlineMeetings/{id}/transcripts",
   "GET /users/{id}/onlineMeetings/{id}/transcripts/{tid}/content",
   "GET /users/{id}/onlineMeetings/getAllTranscripts",

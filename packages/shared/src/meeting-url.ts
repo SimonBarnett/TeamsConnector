@@ -23,6 +23,21 @@ export function redactJoinUrl(raw: string, maxLength = 512): string {
   return out;
 }
 
+/** Canonical JoinWebUrl for Graph $filter: no query/hash, path decoded. */
+export function normalizeJoinWebUrl(raw: string): string {
+  const parsed = new URL(raw);
+  parsed.search = "";
+  parsed.hash = "";
+  try {
+    parsed.pathname = decodeURIComponent(parsed.pathname);
+  } catch {
+    /* keep encoded path */
+  }
+  let out = parsed.toString();
+  if (out.endsWith("/")) out = out.slice(0, -1);
+  return out;
+}
+
 /** 19:meeting_…@thread.v2 from a (possibly redacted) join URL path. */
 export function threadIdFromJoinUrl(raw: string): string | undefined {
   try {

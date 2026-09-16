@@ -2,4 +2,5 @@ export type { GraphMeetingClient, GraphTranscriptRef, MeetingResolveInput } from
 export { GRAPH_TRACK_A_OPS } from "./client.ts";
 export { FakeGraphClient, fixtureCatchup, type FakeMeeting } from "./fake.ts";
 export { parseGraphJson, parseTranscriptContent, parseWebVtt } from "./vtt.ts";
-export { ClientCredentialsTokenProvider, GraphRestClient, type TokenProvider } from "./rest.ts";
+export { ClientCredentialsTokenProvider, ClientCertificateTokenProvider, GraphRestClient, type TokenProvider } from "./rest.ts";
+export { GraphHttpError, classifyGraphError, looksLikeMissingAccessPolicy } from "./http-error.ts";

@@ -1,5 +1,5 @@
 import { PgStore } from "@teams-audio-join/store";
-import type { HostConfig } from "./env.ts";
+import { encryptionKeyEntropyOk, type HostConfig } from "./env.ts";
 
 export interface DoctorCheck {
   name: string;
@@ -21,10 +21,15 @@ export async function runDoctor(cfg: HostConfig, opts?: { graphProbe?: () => Pro
     ok: nodeMaj >= 22,
     detail: `node ${process.versions.node} (need >= 22)`,
   });
+  const keyOk = encryptionKeyEntropyOk(cfg.encryptionKey);
   checks.push({
     name: "encryption",
-    ok: cfg.nodeEnv !== "production" || Boolean(cfg.encryptionKey),
-    detail: cfg.encryptionKey ? "ARTIFACT_ENCRYPTION_KEY set" : "dev fallback key (not for production)",
+    ok: cfg.nodeEnv !== "production" || keyOk,
+    detail: keyOk
+      ? "ARTIFACT_ENCRYPTION_KEY 32-byte"
+      : cfg.encryptionKey
+        ? "ARTIFACT_ENCRYPTION_KEY is not 32 bytes after base64"
+        : "dev fallback key (not for production)",
   });
 
   if (cfg.databaseUrl) {
@@ -48,7 +53,9 @@ export async function runDoctor(cfg: HostConfig, opts?: { graphProbe?: () => Pro
     if (opts?.graphProbe) {
       try {
         graphOk = await opts.graphProbe();
-        graphDetail += graphOk ? " (token/probe ok)" : " (probe failed — check application access policy; Graph 404 looks like meeting_not_found)";
+        graphDetail += graphOk
+          ? " (onlineMeetings?$top=1 ok)"
+          : " (probe failed — application access policy missing is policy_missing, not meeting_not_found)";
       } catch (err) {
         graphOk = false;
         graphDetail += ` (${err instanceof Error ? err.message : "probe error"})`;
@@ -98,6 +105,12 @@ export async function runDoctor(cfg: HostConfig, opts?: { graphProbe?: () => Pro
       detail: "Graph is configured but MEDIA_WORKER_URL is empty. Real Teams will not hear the assistant. Set the Windows worker URL or MEDIA_WORKER_ENABLED=false for notes-only.",
     });
   }
+
+  checks.push({
+    name: "poll",
+    ok: !cfg.azure || cfg.pollMs > 0,
+    detail: `pollMs=${cfg.pollMs}${cfg.azure && cfg.pollMs === 0 ? " — Track A will not poll" : ""}`,
+  });
 
   checks.push({
     name: "summarizer",

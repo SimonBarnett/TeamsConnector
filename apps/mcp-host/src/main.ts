@@ -14,10 +14,15 @@ if (process.argv.includes("doctor") || process.env.MCP_DOCTOR === "1") {
 }
 
 if (cfg.transport === "http") {
-  const server = createHttpServer(orch, { doctor });
+  const server = createHttpServer(orch, {
+    doctor,
+    includeWorkflows: cfg.workflowTrigger,
+    production: cfg.nodeEnv === "production",
+    mediaSecret: cfg.mediaWorkerSecret,
+  });
   server.listen(cfg.httpPort, () => {
     process.stderr.write(`MCP HTTP :${cfg.httpPort}  GET /ready for doctor\n`);
   });
 } else {
-  await serveStdio(orch);
+  await serveStdio(orch, { includeWorkflows: cfg.workflowTrigger });
 }

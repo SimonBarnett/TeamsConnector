@@ -28,4 +28,19 @@ describe("HttpMediaWorker", () => {
     expect((await w.leave("ses_1")).closeLatencyMs).toBe(3);
     expect(calls.some((c) => c.url.endsWith("/admit") && c.body.includes("19:meeting_abc"))).toBe(true);
   });
+
+  it("sends the shared secret on mutating worker calls", async () => {
+    const headers: string[] = [];
+    const w = new HttpMediaWorker(
+      "http://worker:7071",
+      async (url, init) => {
+        headers.push(String((init?.headers as { authorization?: string } | undefined)?.authorization ?? ""));
+        if (String(url).endsWith("/cancel")) return Response.json({ cancelled: ["utt_1"], stopLatencyMs: 12 });
+        return Response.json({ healthy: true });
+      },
+      "s3cret",
+    );
+    await w.cancel("ses_1", "utt_1");
+    expect(headers.some((h) => h === "Bearer s3cret")).toBe(true);
+  });
 });

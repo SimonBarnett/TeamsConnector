@@ -22,7 +22,7 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        working-directory: services/media-worker
+        working-directory: services/media-worker.tests
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

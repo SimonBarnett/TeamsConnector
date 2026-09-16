@@ -11,7 +11,14 @@ export class HttpMediaWorker implements MediaWorker {
   constructor(
     private readonly baseUrl: string,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly secret?: string,
   ) {}
+
+  private headers(): Record<string, string> {
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (this.secret) headers.authorization = `Bearer ${this.secret}`;
+    return headers;
+  }
 
   private url(path: string): string {
     return `${this.baseUrl.replace(/\/$/, "")}${path}`;
@@ -31,7 +38,7 @@ export class HttpMediaWorker implements MediaWorker {
   async admit(sessionId: string, opts: MediaAdmitOpts): Promise<{ videoSending: boolean; canHear: boolean }> {
     const res = await this.fetchImpl(this.url("/admit"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: this.headers(),
       body: JSON.stringify({ sessionId, ...opts }),
     });
     return json(res);
@@ -40,7 +47,7 @@ export class HttpMediaWorker implements MediaWorker {
   async play(sessionId: string, cmd: PlayCommand): Promise<{ status: "playing" | "queued" }> {
     const res = await this.fetchImpl(this.url("/play"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: this.headers(),
       body: JSON.stringify({ sessionId, ...cmd }),
     });
     return json(res);
@@ -49,7 +56,7 @@ export class HttpMediaWorker implements MediaWorker {
   async cancel(sessionId: string, utteranceId?: string): Promise<{ cancelled: string[]; stopLatencyMs: number }> {
     const res = await this.fetchImpl(this.url("/cancel"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: this.headers(),
       body: JSON.stringify({ sessionId, utteranceId }),
     });
     return json(res);
@@ -58,7 +65,7 @@ export class HttpMediaWorker implements MediaWorker {
   async bargeIn(sessionId: string): Promise<{ cancelled: string[]; stopLatencyMs: number }> {
     const res = await this.fetchImpl(this.url("/barge-in"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: this.headers(),
       body: JSON.stringify({ sessionId }),
     });
     return json(res);
@@ -67,7 +74,7 @@ export class HttpMediaWorker implements MediaWorker {
   async mute(sessionId: string): Promise<{ cancelled: string[] }> {
     const res = await this.fetchImpl(this.url("/mute"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: this.headers(),
       body: JSON.stringify({ sessionId }),
     });
     return json(res);
@@ -76,7 +83,7 @@ export class HttpMediaWorker implements MediaWorker {
   async leave(sessionId: string): Promise<{ closeLatencyMs: number }> {
     const res = await this.fetchImpl(this.url("/leave"), {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: this.headers(),
       body: JSON.stringify({ sessionId }),
     });
     return json(res);

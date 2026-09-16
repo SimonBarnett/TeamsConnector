@@ -39,7 +39,7 @@ import {
 } from "@teams-audio-join/shared";
 import type { ConnectorStore } from "@teams-audio-join/store";
 import type { GraphMeetingClient } from "@teams-audio-join/graph";
-import { parseTranscriptContent } from "@teams-audio-join/graph";
+import { GraphHttpError, parseTranscriptContent } from "@teams-audio-join/graph";
 import { hoursHintFor, summarise, type LlmClient } from "@teams-audio-join/summarizer";
 import { classifyCaptions } from "./classify.ts";
 import { matchEcho, type PlayedUtterance } from "./echo.ts";
@@ -200,11 +200,19 @@ export class Orchestrator {
       trackBConsented: Boolean(tenant?.trackBConsented),
     });
 
-    const resolved = await this.graph.resolveMeeting({
-      meetingUrl: req.meetingUrl,
-      eventId: req.eventId,
-      onlineMeetingId: req.onlineMeetingId,
-    });
+    let resolved;
+    try {
+      resolved = await this.graph.resolveMeeting({
+        meetingUrl: req.meetingUrl,
+        eventId: req.eventId,
+        onlineMeetingId: req.onlineMeetingId,
+      });
+    } catch (err) {
+      if (err instanceof GraphHttpError) {
+        throw new ConnectorError(err.connectorCode, err.message);
+      }
+      throw err;
+    }
     if (!resolved) {
       throw new ConnectorError("meeting_not_found", "eventId/url/id did not resolve to an online meeting.");
     }
@@ -386,12 +394,25 @@ export class Orchestrator {
     }
 
     await this.markPlaying(session, utteranceId, req.text, priority, allowBargeIn, durationMs);
+    if (!this.audibleInTeams) {
+      return ok(
+        {
+          utteranceId,
+          status: "played_locally" as const,
+          estimatedDurationMs: durationMs,
+          audibleInTeams: false,
+          warning:
+            "played_locally: fixture/loopback only — Teams attendees did not hear this. Graph-media-live with Path A playPrompt is required for audibleInTeams.",
+        },
+        meta.requestId,
+      );
+    }
     return ok(
       {
         utteranceId,
         status: "playing",
         estimatedDurationMs: durationMs,
-        audibleInTeams: this.audibleInTeams,
+        audibleInTeams: true,
       },
       meta.requestId,
     );
@@ -455,6 +476,26 @@ export class Orchestrator {
       return ok(data, meta.requestId);
     }
 
+    const artifactId = await this.finalizeLeave(session, req.reason === "error" ? "error" : "user_leave");
+    const data: LeaveMeetingResponse = {
+      sessionId: session.sessionId,
+      status: "left",
+      endedAt: session.endedAt ?? nowIso(),
+    };
+    if (artifactId) data.artifactId = artifactId;
+    return ok(data, meta.requestId);
+  }
+
+  /** Worker callback: hangup/eject ends the Node session. */
+  async handleMediaEvent(sessionId: string, event: "established" | "ejected"): Promise<void> {
+    const session = await this.store.getSession(sessionId);
+    if (!session) return;
+    if (event === "established") return;
+    if (session.state === "ended" || session.state === "failed") return;
+    await this.finalizeLeave(session, "ejected");
+  }
+
+  private async finalizeLeave(session: SessionRecord, reason: EndedReason): Promise<string | undefined> {
     session.state = "leaving";
     await this.store.putSession(session);
     this.stopTrackA(session.sessionId);
@@ -481,7 +522,7 @@ export class Orchestrator {
 
     session.state = "ended";
     session.endedAt = nowIso();
-    session.endedReason = req.reason === "error" ? "error" : "user_leave";
+    session.endedReason = reason;
     session.video = session.avatar
       ? { sending: false, source: "none" }
       : session.video;
@@ -504,14 +545,7 @@ export class Orchestrator {
         payload: { reason: session.endedReason, artifactId },
       }),
     );
-
-    const data: LeaveMeetingResponse = {
-      sessionId: session.sessionId,
-      status: "left",
-      endedAt: session.endedAt,
-    };
-    if (artifactId) data.artifactId = artifactId;
-    return ok(data, meta.requestId);
+    return artifactId;
   }
 
   async upsertStandingRoutine(meta: CallMeta, raw: unknown): Promise<Envelope<unknown>> {
@@ -609,7 +643,19 @@ export class Orchestrator {
     }
 
     const omId = session.meeting.onlineMeetingId;
-    const participants = omId ? await this.graph.getParticipants(omId) : [];
+    let participants: SessionRecord["participants"] = [];
+    try {
+      participants = omId ? await this.graph.getParticipants(omId) : [];
+    } catch (err) {
+      const wrapped =
+        err instanceof GraphHttpError
+          ? new ConnectorError(err.connectorCode, err.message)
+          : new ConnectorError(
+              "dependency_unavailable",
+              err instanceof Error ? err.message : "roster fetch failed",
+            );
+      session.lastError = wrapped.toBody();
+    }
     if (!participants.some((p) => p.isAssistant)) {
       participants.push({
         id: "assistant",

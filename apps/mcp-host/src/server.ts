@@ -77,7 +77,14 @@ function htmlPage(title: string, body: string): string {
 </html>`;
 }
 
-export async function handleRpc(orch: Orchestrator, msg: JsonRpcReq): Promise<unknown> {
+export interface HostHttpHooks {
+  doctor?: () => Promise<DoctorReport>;
+  includeWorkflows?: boolean;
+  production?: boolean;
+  mediaSecret?: string;
+}
+
+export async function handleRpc(orch: Orchestrator, msg: JsonRpcReq, opts?: { includeWorkflows?: boolean }): Promise<unknown> {
   const id = msg.id ?? null;
   if (msg.method === "initialize") {
     return {
@@ -98,7 +105,7 @@ export async function handleRpc(orch: Orchestrator, msg: JsonRpcReq): Promise<un
       jsonrpc: "2.0",
       id,
       result: {
-        tools: listedMcpTools(),
+        tools: listedMcpTools({ includeWorkflows: Boolean(opts?.includeWorkflows) }),
       },
     };
   }
@@ -129,20 +136,36 @@ function normalizePath(url: string | undefined): string {
   return raw;
 }
 
-export function createHttpServer(
-  orch: Orchestrator,
-  hooks?: { doctor?: () => Promise<DoctorReport> },
-) {
-  return createServer(async (req, res) => {
-    try {
-      const path = normalizePath(req.url);
-      const method = req.method ?? "GET";
-      if (method === "GET" && (path === "/" || path === "/mcp")) {
-        if (!wantsJson(req)) {
-          res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-          res.end(htmlPage("teams-audio-join", `
+function landingHtml(production: boolean): string {
+  const fixtureButtons = production
+    ? ""
+    : `<button type="button" id="join">Join fixture meeting</button>
+  <button type="button" id="speak">Speak</button>`;
+  const fixtureScript = production
+    ? ""
+    : `document.getElementById("join").onclick = async () => {
+  const json = await rpc("tools/call", {
+    name: "join_meeting",
+    arguments: { onlineMeetingId: "om-priority", mode: "listen_speak", announce: false },
+    meta
+  });
+  try {
+    const env = JSON.parse(json.result.content[0].text);
+    sessionId = env.data && env.data.sessionId || "";
+  } catch {}
+};
+document.getElementById("speak").onclick = () => {
+  if (!sessionId) { out.textContent = "Join first."; return; }
+  rpc("tools/call", {
+    name: "speak",
+    arguments: { sessionId, text: "Hello team, the local demo is running." },
+    meta
+  });
+};`;
+  return htmlPage("teams-audio-join", `
 <h1>teams-audio-join</h1>
 <p>MCP JSON-RPC host. Browsers cannot POST from the address bar — use the buttons or <a href="/ready">/ready</a>.</p>
+${production ? "<p>Production HTTP: fixture Join/Speak controls are hidden.</p>" : ""}
 <div class="row">
   <a href="/ready">Doctor /ready</a>
   <a href="/health">/health</a>
@@ -150,8 +173,7 @@ export function createHttpServer(
 </div>
 <div class="row">
   <button type="button" id="list">List tools</button>
-  <button type="button" id="join">Join fixture meeting</button>
-  <button type="button" id="speak">Speak</button>
+  ${fixtureButtons}
 </div>
 <pre id="out">Click List tools to call POST /mcp.</pre>
 <script>
@@ -174,26 +196,26 @@ async function rpc(method, params) {
   return json;
 }
 document.getElementById("list").onclick = () => rpc("tools/list");
-document.getElementById("join").onclick = async () => {
-  const json = await rpc("tools/call", {
-    name: "join_meeting",
-    arguments: { onlineMeetingId: "om-priority", mode: "listen_speak", announce: false },
-    meta
-  });
-  try {
-    const env = JSON.parse(json.result.content[0].text);
-    sessionId = env.data && env.data.sessionId || "";
-  } catch {}
-};
-document.getElementById("speak").onclick = () => {
-  if (!sessionId) { out.textContent = "Join first."; return; }
-  rpc("tools/call", {
-    name: "speak",
-    arguments: { sessionId, text: "Hello team, the local demo is running." },
-    meta
-  });
-};
-</script>`));
+${fixtureScript}
+</script>`);
+}
+
+function isLoopbackAddr(addr: string | undefined): boolean {
+  return addr === "127.0.0.1" || addr === "::1" || addr === ":ffff:127.0.0.1" || addr === "::ffff:127.0.0.1";
+}
+
+export function createHttpServer(
+  orch: Orchestrator,
+  hooks?: HostHttpHooks,
+) {
+  return createServer(async (req, res) => {
+    try {
+      const path = normalizePath(req.url);
+      const method = req.method ?? "GET";
+      if (method === "GET" && (path === "/" || path === "/mcp")) {
+        if (!wantsJson(req)) {
+          res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+          res.end(landingHtml(Boolean(hooks?.production)));
           return;
         }
         send(res, 200, landingPayload());
@@ -221,10 +243,26 @@ document.getElementById("speak").onclick = () => {
         res.end(orch.metrics.renderPrometheus());
         return;
       }
+      if (method === "POST" && path === "/internal/media-event") {
+        const auth = String(req.headers.authorization ?? "");
+        const allowed = hooks?.mediaSecret
+          ? auth === `Bearer ${hooks.mediaSecret}`
+          : isLoopbackAddr(req.socket.remoteAddress);
+        if (!allowed) {
+          send(res, 401, { ok: false, error: { code: "unauthenticated", message: "media-event unauthorized", retryable: false } });
+          return;
+        }
+        const body = JSON.parse(await readBody(req)) as { sessionId?: string; event?: string };
+        if (body.sessionId && (body.event === "ejected" || body.event === "established")) {
+          await orch.handleMediaEvent(body.sessionId, body.event);
+        }
+        send(res, 200, { ok: true });
+        return;
+      }
       if (method === "POST" && (path === "/mcp" || path === "/")) {
         const raw = await readBody(req);
         const msg = JSON.parse(raw) as JsonRpcReq;
-        send(res, 200, await handleRpc(orch, msg));
+        send(res, 200, await handleRpc(orch, msg, { includeWorkflows: hooks?.includeWorkflows }));
         return;
       }
       send(res, 404, {
@@ -254,7 +292,7 @@ function writeStdioFrame(msg: unknown): void {
   process.stdout.write(json);
 }
 
-export async function serveStdio(orch: Orchestrator): Promise<void> {
+export async function serveStdio(orch: Orchestrator, opts?: { includeWorkflows?: boolean }): Promise<void> {
   let buf = Buffer.alloc(0);
   process.stdin.on("data", (chunk: Buffer) => {
     buf = Buffer.concat([buf, chunk]);
@@ -283,7 +321,7 @@ export async function serveStdio(orch: Orchestrator): Promise<void> {
       buf = buf.subarray(start + len);
       try {
         const msg = JSON.parse(body) as JsonRpcReq;
-        writeStdioFrame(await handleRpc(o, msg));
+        writeStdioFrame(await handleRpc(o, msg, opts));
       } catch (err) {
         writeStdioFrame({
           jsonrpc: "2.0",

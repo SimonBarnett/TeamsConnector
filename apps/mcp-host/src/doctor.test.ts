@@ -24,9 +24,10 @@ describe("runDoctor", () => {
         AZURE_CLIENT_ID: "c",
         AZURE_CLIENT_SECRET: "s",
         GRAPH_USER_ID: "u",
-        ARTIFACT_ENCRYPTION_KEY: "k",
+        ARTIFACT_ENCRYPTION_KEY: Buffer.alloc(32, 9).toString("base64"),
       }),
     );
     expect(report.checks.find((c) => c.name === "media")?.ok).toBe(false);
+    expect(report.checks.find((c) => c.name === "poll")?.detail).toMatch(/pollMs=15000/);
   });
 });

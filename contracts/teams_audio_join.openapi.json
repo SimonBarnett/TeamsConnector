@@ -397,6 +397,7 @@
           "unauthenticated",
           "consent_required",
           "policy_denied",
+          "policy_missing",
           "meeting_not_found",
           "lobby_timeout",
           "media_permission_denied",
@@ -531,6 +532,7 @@
           "queued",
           "playing",
           "played",
+          "played_locally",
           "cancelled",
           "rejected"
         ]
@@ -1282,6 +1284,7 @@
             "enum": [
               "queued",
               "playing",
+              "played_locally",
               "rejected"
             ]
           },
@@ -1295,6 +1298,13 @@
           },
           "error": {
             "$ref": "#/components/schemas/Error"
+          },
+          "audibleInTeams": {
+            "type": "boolean"
+          },
+          "warning": {
+            "type": "string",
+            "maxLength": 400
           }
         }
       },

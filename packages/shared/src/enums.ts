@@ -38,7 +38,7 @@ export type ParticipantRole = (typeof PARTICIPANT_ROLES)[number];
 export const SPEAK_PRIORITIES = ["normal", "urgent"] as const;
 export type SpeakPriority = (typeof SPEAK_PRIORITIES)[number];
 
-export const SPEAK_STATUSES = ["queued", "playing", "played", "cancelled", "rejected"] as const;
+export const SPEAK_STATUSES = ["queued", "playing", "played", "played_locally", "cancelled", "rejected"] as const;
 export type SpeakStatus = (typeof SPEAK_STATUSES)[number];
 
 export const SUMMARY_STYLES = ["bullets", "memo", "hours"] as const;
@@ -88,6 +88,7 @@ export const ERROR_CODES = [
   "unauthenticated",
   "consent_required",
   "policy_denied",
+  "policy_missing",
   "meeting_not_found",
   "lobby_timeout",
   "media_permission_denied",

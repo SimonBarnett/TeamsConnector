@@ -219,12 +219,14 @@ export interface SpeakRequest {
 
 export interface SpeakResponse {
   utteranceId: string;
-  status: "queued" | "playing" | "rejected";
+  status: "queued" | "playing" | "played_locally" | "rejected";
   reason?: string;
   estimatedDurationMs?: number;
   error?: ConnectorErrorBody;
   /** False for fixture loopback. True only after Graph playPrompt of synthesised audio. */
   audibleInTeams?: boolean;
+  /** Present on fixture/loopback speak so the model cannot treat it as live Teams audio. */
+  warning?: string;
 }
 
 export interface CancelSpeechRequest {

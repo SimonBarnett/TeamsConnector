@@ -100,8 +100,16 @@ export const TOOL_INPUT_SCHEMAS: Record<ToolName, Record<string, unknown>> = {
   },
 };
 
-export function listedMcpTools() {
-  return MCP_TOOLS.map((t) => ({
+const WORKFLOW_TOOL_NAMES = new Set<ToolName>([
+  "upsert_standing_routine",
+  "list_standing_routines",
+  "delete_standing_routine",
+  "prepare_hours_draft",
+]);
+
+/** Spec audio tools (7). Hours/calendar extras stay hidden unless WORKFLOW_TRIGGER=1. */
+export function listedMcpTools(opts?: { includeWorkflows?: boolean }) {
+  return MCP_TOOLS.filter((t) => opts?.includeWorkflows || !WORKFLOW_TOOL_NAMES.has(t.name)).map((t) => ({
     name: t.name,
     description: t.description,
     inputSchema: TOOL_INPUT_SCHEMAS[t.name],

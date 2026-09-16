@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { InMemoryStore } from "@teams-audio-join/store";
-import { FakeGraphClient, fixtureCatchup } from "@teams-audio-join/graph";
+import { FakeGraphClient, fixtureCatchup, GraphHttpError } from "@teams-audio-join/graph";
 import { FixtureLlmClient } from "@teams-audio-join/summarizer";
 import { looksLikeAudioBlobName } from "@teams-audio-join/shared";
 import { MemoryEventSink } from "./events.ts";
@@ -258,8 +258,9 @@ describe("Orchestrator", () => {
     const spoken = await orch.call("speak", { sessionId, text: "Hello everyone, I am here to help." }, testMeta());
     expect(spoken.ok).toBe(true);
     if (!spoken.ok) return;
-    expect((spoken.data as { status: string }).status).toBe("playing");
-    expect((spoken.data as { audibleInTeams?: boolean }).audibleInTeams).toBeFalsy();
+    expect((spoken.data as { status: string }).status).toBe("played_locally");
+    expect((spoken.data as { audibleInTeams?: boolean }).audibleInTeams).toBe(false);
+    expect((spoken.data as { warning?: string }).warning ?? "").toMatch(/Teams attendees did not hear/);
     const status = await orch.call("get_meeting_status", { sessionId }, testMeta());
     if (!status.ok) return;
     expect((status.data as { mode: string; capabilities: { canSpeak: boolean } }).mode).toBe("listen_speak");
@@ -276,7 +277,7 @@ describe("Orchestrator", () => {
     expect(spoken.ok).toBe(true);
     if (!spoken.ok) return;
     const data = spoken.data as { status: string; utteranceId: string };
-    expect(data.status).toBe("playing");
+    expect(data.status).toBe("played_locally");
     const segs = await store.listSegments(sessionId, 0, true, 50);
     expect(segs.some((s) => s.speakerKind === "assistant" && s.linkedUtteranceId === data.utteranceId)).toBe(true);
   });
@@ -297,7 +298,7 @@ describe("Orchestrator", () => {
       const r = await orch.call("speak", { sessionId, text: `Update number ${i} is done.` }, testMeta());
       expect(r.ok).toBe(true);
       if (!r.ok) return;
-      expect((r.data as { status: string }).status).toBe("playing");
+      expect((r.data as { status: string }).status).toBe("played_locally");
       await orch.call("cancel_speech", { sessionId }, testMeta());
     }
     const seventh = await orch.call("speak", { sessionId, text: "This should be capped." }, testMeta());
@@ -427,5 +428,57 @@ describe("Orchestrator", () => {
       testMeta(),
     );
     expect(failJoin.ok).toBe(false);
+  });
+
+  it("maps Graph 403/policy 404 to policy_missing not meeting_not_found", async () => {
+    const store = new InMemoryStore();
+    await seedReadyTenant(store);
+    const graph = new FakeGraphClient([fixtureCatchup()]);
+    graph.resolveMeeting = async () => {
+      throw new GraphHttpError(404, JSON.stringify({ error: { message: "No application access policy found for this app." } }));
+    };
+    const orch = new Orchestrator({
+      store,
+      graph,
+      events: new MemoryEventSink(),
+      llm: new FixtureLlmClient({ summary: "x" }),
+    });
+    const joined = await orch.call("join_meeting", { onlineMeetingId: "om-priority", mode: "listen" }, testMeta());
+    expect(joined.ok).toBe(false);
+    if (joined.ok) return;
+    expect(joined.error.code).toBe("policy_missing");
+    expect(joined.error.code).not.toBe("meeting_not_found");
+  });
+
+  it("surfaces roster Graph failures on lastError instead of an empty silent list", async () => {
+    const store = new InMemoryStore();
+    await seedReadyTenant(store);
+    const graph = new FakeGraphClient([fixtureCatchup()]);
+    graph.getParticipants = async () => {
+      throw new GraphHttpError(403, JSON.stringify({ error: { code: "Forbidden", message: "no roster" } }));
+    };
+    const orch = new Orchestrator({
+      store,
+      graph,
+      events: new MemoryEventSink(),
+      llm: new FixtureLlmClient({ summary: "x" }),
+    });
+    const joined = await orch.call("join_meeting", { onlineMeetingId: "om-priority", mode: "listen" }, testMeta());
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) return;
+    const status = await orch.call("get_meeting_status", { sessionId: (joined.data as { sessionId: string }).sessionId }, testMeta());
+    expect(status.ok).toBe(true);
+    if (!status.ok) return;
+    const data = status.data as { lastError?: { code: string }; participants: { displayName: string }[] };
+    expect(data.lastError?.code).toBe("policy_missing");
+    expect(data.participants.some((p) => p.displayName.includes("Haitch"))).toBe(true);
+  });
+
+  it("ejects the Node session when the worker reports hangup", async () => {
+    const { orch, sessionId, store } = await speakHarness();
+    await orch.handleMediaEvent(sessionId, "ejected");
+    const session = await store.getSession(sessionId);
+    expect(session?.state).toBe("ended");
+    expect(session?.endedReason).toBe("ejected");
   });
 });

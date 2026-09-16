@@ -122,6 +122,23 @@ public sealed class GraphJoinClient
         }
     }
 
+    public async Task CancelMediaProcessingAsync(string callId, CancellationToken ct = default)
+    {
+        var token = await GetTokenAsync(ct).ConfigureAwait(false);
+        var body = new { clientContext = Guid.NewGuid().ToString("N") };
+        using var req = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"https://graph.microsoft.com/v1.0/communications/calls/{callId}/cancelMediaProcessing");
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        req.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        using var res = await _http.SendAsync(req, ct).ConfigureAwait(false);
+        if (!res.IsSuccessStatusCode)
+        {
+            var text = await res.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            throw new InvalidOperationException($"Graph cancelMediaProcessing {(int)res.StatusCode}: {text}");
+        }
+    }
+
     public async Task DeleteCallAsync(string callId, CancellationToken ct = default)
     {
         var token = await GetTokenAsync(ct).ConfigureAwait(false);

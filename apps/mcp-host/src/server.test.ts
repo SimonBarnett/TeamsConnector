@@ -23,11 +23,8 @@ describe("MCP host", () => {
       "cancel_speech",
       "request_summary",
       "leave_meeting",
-      "upsert_standing_routine",
-      "list_standing_routines",
-      "delete_standing_routine",
-      "prepare_hours_draft",
     ]);
+    expect(names).not.toContain("prepare_hours_draft");
 
     const call = (await handleRpc(orch, {
       jsonrpc: "2.0",
@@ -73,7 +70,17 @@ describe("MCP host", () => {
     })) as { result: { content: { text: string }[]; isError: boolean } };
     const spokenEnv = JSON.parse(spoken.result.content[0]!.text) as { ok: boolean; data: { status: string } };
     expect(spokenEnv.ok).toBe(true);
-    expect(spokenEnv.data.status).toBe("playing");
+    expect(spokenEnv.data.status).toBe("played_locally");
+    expect((spokenEnv.data as { audibleInTeams?: boolean }).audibleInTeams).toBe(false);
+  });
+
+  it("lists Hours/calendar tools only when WORKFLOW_TRIGGER is on", async () => {
+    const { orch } = await composeFromEnv({ DEMO_FIXTURE: "1", NODE_ENV: "test" });
+    const listed = (await handleRpc(orch, { jsonrpc: "2.0", id: 1, method: "tools/list" }, { includeWorkflows: true })) as {
+      result: { tools: { name: string }[] };
+    };
+    expect(listed.result.tools.map((t) => t.name)).toContain("prepare_hours_draft");
+    expect(listed.result.tools.map((t) => t.name)).toContain("upsert_standing_routine");
   });
 
   it("GET / and GET /mcp explain how to POST instead of returning not found", async () => {
@@ -84,7 +91,9 @@ describe("MCP host", () => {
     try {
       const home = await fetch(`http://127.0.0.1:${port}/`);
       expect(home.status).toBe(200);
-      expect(await home.text()).toMatch(/List tools/);
+      const homeText = await home.text();
+      expect(homeText).toMatch(/List tools/);
+      expect(homeText).toMatch(/Join fixture meeting/);
       const asJson = await fetch(`http://127.0.0.1:${port}/?format=json`);
       const body = (await asJson.json()) as { ok: boolean; hint: string };
       expect(body.ok).toBe(true);
@@ -100,6 +109,21 @@ describe("MCP host", () => {
       expect(listed.status).toBe(200);
       const ready = await fetch(`http://127.0.0.1:${port}/ready`);
       expect(ready.status).toBe(200);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    }
+  });
+
+  it("hides fixture Join/Speak buttons on production HTTP", async () => {
+    const { orch } = await composeFromEnv({ DEMO_FIXTURE: "1", NODE_ENV: "test" });
+    const server = createHttpServer(orch, { production: true });
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as { port: number };
+    try {
+      const html = await (await fetch(`http://127.0.0.1:${port}/`)).text();
+      expect(html).toMatch(/List tools/);
+      expect(html).not.toMatch(/Join fixture meeting/);
+      expect(html).not.toMatch(/id="speak"/);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
     }

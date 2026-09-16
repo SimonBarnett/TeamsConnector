@@ -10,5 +10,7 @@ coverage/
 *.tsbuildinfo
 services/media-worker/bin/
 services/media-worker/obj/
+services/media-worker.tests/bin/
+services/media-worker.tests/obj/
 .DS_Store
 Thumbs.db

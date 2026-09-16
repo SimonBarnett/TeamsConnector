@@ -29,7 +29,8 @@ describe("composeFromEnv", () => {
     });
     expect(spoken.ok).toBe(true);
     if (!spoken.ok) return;
-    expect((spoken.data as { status: string }).status).toBe("playing");
+    expect((spoken.data as { status: string }).status).toBe("played_locally");
+    expect((spoken.data as { audibleInTeams?: boolean }).audibleInTeams).toBe(false);
     expect(banner).toContain("mode=fixture-loopback");
   });
 });

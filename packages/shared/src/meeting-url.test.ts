@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { locatorCount, meetingKey, redactJoinUrl, threadIdFromJoinUrl } from "./meeting-url.ts";
+import { locatorCount, meetingKey, normalizeJoinWebUrl, redactJoinUrl, threadIdFromJoinUrl } from "./meeting-url.ts";
 import { validateJoinMeeting } from "./validate.ts";
 import { ConnectorError } from "./errors.ts";
 
@@ -13,6 +13,13 @@ describe("meeting url", () => {
         "https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc/0?pwd=SECRET99",
       ),
     ).toBe("19:meeting_abc@thread.v2");
+  });
+
+  it("normalizes JoinWebUrl by stripping query and decoding the thread path", () => {
+    expect(normalizeJoinWebUrl(JOIN)).toBe(
+      "https://teams.microsoft.com/l/meetup-join/19:meeting_abc/0",
+    );
+    expect(threadIdFromJoinUrl(`${JOIN}&foo=bar`)).toBe("19:meeting_abc@thread.v2");
   });
 
   it("strips query parameters including pwd", () => {
