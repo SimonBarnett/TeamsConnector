@@ -17,7 +17,7 @@ Exit criteria from the original spike (path A restated):
 - [x] `speak({ text })` is heard as that text (not silence) via playPrompt — Simon heard `The test phrase is sunflower-42`
 - [ ] Track A transcripts when transcription is on; `canHear=false` when off
 - [x] No WAV/PCM persisted in the Node artifact store (playPrompt WAV lives in the worker with GUID + TTL)
-- [ ] 5 consecutive joins (table below) — **1 of 5**
+- [ ] 5 consecutive joins (table below) — **2 of 5**
 - [x] Admin consent friction written for **JoinGroupCall**, not AccessMedia
 
 Do **not** flip `plane=auto` to media until this report is signed (five dated rows).
@@ -37,7 +37,7 @@ Do **not** flip `plane=auto` to media until this report is signed (five dated ro
 | Attempt | Admitted | Heard phrase | Notes |
 |---|---|---|---|
 | 1 | [x] | The test phrase is sunflower-42 | 2026-09-16 ~22:40 UTC. `listen_speak`. Graph GET `PUBLIC_BASE_URL/prompts/{guid}.wav` **200** (96844 bytes). Speak JSON `status=playing`, `audibleInTeams=true`. Human (Simon) confirmed heard. Tunnel `democratic-smilies-looking-iowa.trycloudflare.com`. createCall needed organizer `user.tenantId` + `source.application` (7505 without that). |
-| 2 | | | |
+| 2 | [x] | The second test phrase is bluebird-17 | 2026-09-16 same meeting. Speak `playing` / `audibleInTeams=true`. Human confirmed heard. |
 | 3 | | | |
 | 4 | | | |
 | 5 | | | |
