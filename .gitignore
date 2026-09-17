@@ -17,3 +17,5 @@ Thumbs.db
 *.pem
 *.pfx
 *.p12
+apps/web/.next/
+apps/web/out/

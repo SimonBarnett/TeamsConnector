@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer, type IncomingMessage } from "node:http";
 import { listedMcpTools, type Envelope } from "@teams-audio-join/shared";
 import type { Orchestrator } from "@teams-audio-join/orchestrator";
 import type { DoctorReport } from "./doctor.ts";
@@ -24,18 +24,109 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-function send(res: ServerResponse, status: number, body: unknown): void {
-  const json = JSON.stringify(body);
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
-  res.end(json);
+function header(headers: Record<string, string | string[] | undefined>, name: string): string {
+  const v = headers[name] ?? headers[name.toLowerCase()];
+  if (Array.isArray(v)) return v.join(",");
+  return v ?? "";
 }
 
-function wantsJson(req: IncomingMessage): boolean {
-  const url = req.url ?? "";
+function wantsJson(url: string, headers: Record<string, string | string[] | undefined>): boolean {
   if (/[?&]format=json(?:&|$)/.test(url)) return true;
-  const accept = req.headers.accept ?? "";
+  const accept = header(headers, "accept");
   if (accept.includes("text/html")) return false;
   return accept.includes("application/json");
+}
+
+export interface HttpDispatchResult {
+  status: number;
+  headers: Record<string, string>;
+  body: string;
+}
+
+export async function dispatchHttp(
+  orch: Orchestrator,
+  hooks: HostHttpHooks | undefined,
+  input: {
+    method: string;
+    url: string;
+    headers: Record<string, string | string[] | undefined>;
+    body: string;
+    remoteAddr?: string;
+  },
+): Promise<HttpDispatchResult> {
+  const jsonHeaders = { "content-type": "application/json; charset=utf-8" };
+  const htmlHeaders = { "content-type": "text/html; charset=utf-8" };
+  const pack = (status: number, headers: Record<string, string>, body: string): HttpDispatchResult => ({
+    status,
+    headers,
+    body,
+  });
+  const json = (status: number, body: unknown) => pack(status, jsonHeaders, JSON.stringify(body));
+  try {
+    const path = normalizePath(input.url);
+    const method = input.method || "GET";
+    if (method === "GET" && (path === "/" || path === "/mcp")) {
+      if (!wantsJson(input.url, input.headers)) {
+        return pack(200, htmlHeaders, landingHtml(Boolean(hooks?.production)));
+      }
+      return json(200, landingPayload());
+    }
+    if (method === "GET" && (path === "/health" || path === "/ready")) {
+      if (hooks?.doctor && path === "/ready") {
+        const report = await hooks.doctor();
+        if (!wantsJson(input.url, input.headers)) {
+          const rows = report.checks
+            .map((c) => `<li class="${c.ok ? "ok" : "fail"}"><strong>${c.name}</strong> — ${c.detail}</li>`)
+            .join("");
+          return pack(
+            report.ok ? 200 : 503,
+            htmlHeaders,
+            htmlPage("ready", `<p><a href="/">Home</a></p><h1>mode=${report.mode} ready=${report.ok ? "yes" : "no"}</h1><ul>${rows}</ul>`),
+          );
+        }
+        return json(report.ok ? 200 : 503, report);
+      }
+      return json(200, { ok: true });
+    }
+    if (method === "GET" && path === "/metrics") {
+      return pack(200, { "content-type": "text/plain; version=0.0.4" }, orch.metrics.renderPrometheus());
+    }
+    if (method === "POST" && path === "/internal/media-event") {
+      const auth = header(input.headers, "authorization");
+      const allowed = hooks?.mediaSecret
+        ? auth === `Bearer ${hooks.mediaSecret}`
+        : isLoopbackAddr(input.remoteAddr);
+      if (!allowed) {
+        return json(401, { ok: false, error: { code: "unauthenticated", message: "media-event unauthorized", retryable: false } });
+      }
+      const body = JSON.parse(input.body || "{}") as { sessionId?: string; event?: string };
+      if (body.sessionId && (body.event === "ejected" || body.event === "established")) {
+        await orch.handleMediaEvent(body.sessionId, body.event);
+      }
+      return json(200, { ok: true });
+    }
+    if (method === "POST" && (path === "/mcp" || path === "/")) {
+      const msg = JSON.parse(input.body || "{}") as JsonRpcReq;
+      return json(200, await handleRpc(orch, msg, { includeWorkflows: hooks?.includeWorkflows }));
+    }
+    return json(404, {
+      ok: false,
+      error: {
+        code: "invalid_argument",
+        message: `${method} ${path} is not a route. Use GET /ready or POST /mcp.`,
+        retryable: false,
+      },
+    });
+  } catch (err) {
+    return json(500, {
+      ok: false,
+      error: {
+        code: "dependency_unavailable",
+        message: err instanceof Error ? err.message : "error",
+        retryable: true,
+      },
+    });
+  }
 }
 
 function landingPayload() {
@@ -209,80 +300,15 @@ export function createHttpServer(
   hooks?: HostHttpHooks,
 ) {
   return createServer(async (req, res) => {
-    try {
-      const path = normalizePath(req.url);
-      const method = req.method ?? "GET";
-      if (method === "GET" && (path === "/" || path === "/mcp")) {
-        if (!wantsJson(req)) {
-          res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-          res.end(landingHtml(Boolean(hooks?.production)));
-          return;
-        }
-        send(res, 200, landingPayload());
-        return;
-      }
-      if (method === "GET" && (path === "/health" || path === "/ready")) {
-        if (hooks?.doctor && path === "/ready") {
-          const report = await hooks.doctor();
-          if (!wantsJson(req)) {
-            const rows = report.checks
-              .map((c) => `<li class="${c.ok ? "ok" : "fail"}"><strong>${c.name}</strong> — ${c.detail}</li>`)
-              .join("");
-            res.writeHead(report.ok ? 200 : 503, { "content-type": "text/html; charset=utf-8" });
-            res.end(htmlPage("ready", `<p><a href="/">Home</a></p><h1>mode=${report.mode} ready=${report.ok ? "yes" : "no"}</h1><ul>${rows}</ul>`));
-            return;
-          }
-          send(res, report.ok ? 200 : 503, report);
-          return;
-        }
-        send(res, 200, { ok: true });
-        return;
-      }
-      if (method === "GET" && path === "/metrics") {
-        res.writeHead(200, { "content-type": "text/plain; version=0.0.4" });
-        res.end(orch.metrics.renderPrometheus());
-        return;
-      }
-      if (method === "POST" && path === "/internal/media-event") {
-        const auth = String(req.headers.authorization ?? "");
-        const allowed = hooks?.mediaSecret
-          ? auth === `Bearer ${hooks.mediaSecret}`
-          : isLoopbackAddr(req.socket.remoteAddress);
-        if (!allowed) {
-          send(res, 401, { ok: false, error: { code: "unauthenticated", message: "media-event unauthorized", retryable: false } });
-          return;
-        }
-        const body = JSON.parse(await readBody(req)) as { sessionId?: string; event?: string };
-        if (body.sessionId && (body.event === "ejected" || body.event === "established")) {
-          await orch.handleMediaEvent(body.sessionId, body.event);
-        }
-        send(res, 200, { ok: true });
-        return;
-      }
-      if (method === "POST" && (path === "/mcp" || path === "/")) {
-        const raw = await readBody(req);
-        const msg = JSON.parse(raw) as JsonRpcReq;
-        send(res, 200, await handleRpc(orch, msg, { includeWorkflows: hooks?.includeWorkflows }));
-        return;
-      }
-      send(res, 404, {
-        ok: false,
-        error: {
-          code: "invalid_argument",
-          message: `${method} ${path} is not a route. Use GET /ready or POST /mcp.`,
-          retryable: false,
-        },
-      });
-    } catch (err) {
-      send(res, 500, {
-        ok: false,
-        error: {
-          code: "dependency_unavailable",
-          message: err instanceof Error ? err.message : "error",
-          retryable: true,
-        },
-      });
-    }
+    const dispatched = await dispatchHttp(orch, hooks, {
+      method: req.method ?? "GET",
+      url: req.url ?? "/",
+      headers: req.headers as Record<string, string | string[] | undefined>,
+      body: req.method === "GET" || req.method === "HEAD" ? "" : await readBody(req),
+      remoteAddr: req.socket.remoteAddress,
+    });
+    res.writeHead(dispatched.status, dispatched.headers);
+    res.end(dispatched.body);
   });
 }
 

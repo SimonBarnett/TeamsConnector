@@ -59,6 +59,8 @@ Demo MCP (fixture Graph meeting, no Azure — **Teams attendees will not hear TT
 npm start
 ```
 
+Public MCP HTTP for Grok: host `apps/web` on AWS Amplify at `mcp-teams.ntsa.uk` — see `docs/amplify-ntsa.md`. Amplify does **not** replace the Windows media worker.
+
 HTTP transport (`GET /ready` is the doctor):
 
 ```bash

@@ -6,12 +6,14 @@ import { nowIso } from "@teams-audio-join/shared";
 import { CalendarTrigger, FakeCalendar, HttpCalendarPort } from "@teams-audio-join/workflows";
 import { assertHostConfig, parseHostConfig, type HostConfig } from "./env.ts";
 import { runDoctor, type DoctorReport } from "./doctor.ts";
+import type { HostHttpHooks } from "./server.ts";
 
 export interface Composed {
   cfg: HostConfig;
   orch: Orchestrator;
   doctor: () => Promise<DoctorReport>;
   banner: string;
+  httpHooks: HostHttpHooks;
 }
 
 export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Promise<Composed> {
@@ -172,5 +174,11 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
     .filter(Boolean)
     .join(" | ");
 
-  return { cfg, orch, doctor, banner };
+  const httpHooks: HostHttpHooks = {
+    doctor,
+    includeWorkflows: cfg.workflowTrigger,
+    production: cfg.nodeEnv === "production",
+    mediaSecret: cfg.mediaWorkerSecret,
+  };
+  return { cfg, orch, doctor, banner, httpHooks };
 }
