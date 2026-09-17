@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { ClientCertificateTokenProvider, ClientCredentialsTokenProvider, GraphRestClient, clientAssertionJwt } from "./rest.ts";
 import { GraphHttpError, classifyGraphError } from "./http-error.ts";
@@ -184,9 +185,28 @@ describe("GraphRestClient", () => {
   });
 });
 
+function ephemeralClientPem(): string | undefined {
+  const dir = mkdtempSync(join(tmpdir(), "taj-cert-"));
+  try {
+    const key = join(dir, "key.pem");
+    const cert = join(dir, "cert.pem");
+    execFileSync(
+      "openssl",
+      ["req", "-x509", "-newkey", "rsa:2048", "-keyout", key, "-out", cert, "-days", "1", "-nodes", "-subj", "/CN=taj-unit-test"],
+      { stdio: "pipe" },
+    );
+    return `${readFileSync(cert, "utf8")}\n${readFileSync(key, "utf8")}`;
+  } catch {
+    return undefined;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 describe("ClientCertificateTokenProvider", () => {
   it("posts a client_assertion JWT", async () => {
-    const pem = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "fixtures/test-client.pem"), "utf8");
+    const pem = ephemeralClientPem();
+    if (!pem) return; // openssl not on PATH (e.g. some Windows boxes)
     const jwt = clientAssertionJwt({ tenantId: "t", clientId: "id", pem, nowSec: 1_700_000_000 });
     expect(jwt.split(".")).toHaveLength(3);
     const posted: string[] = [];
