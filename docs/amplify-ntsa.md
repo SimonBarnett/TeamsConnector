@@ -4,16 +4,16 @@ Amplify runs the **Node MCP HTTP** app (`POST /mcp`, `GET /ready`). It does **no
 
 ## 1. Amplify app (console)
 
-This machine has no AWS CLI. Create the app in the AWS console:
+AWS CLI is on this machine (`eu-west-2`). App id `dwn8q7r62chx6`, default domain `dwn8q7r62chx6.amplifyapp.com`.
 
-1. Open [https://console.aws.amazon.com/amplify](https://console.aws.amazon.com/amplify) on **Azure subscription is unrelated** — use the AWS account that will own `ntsa.uk`.
-2. **Create new app** → **GitHub** → `SimonBarnett/TeamsConnector` → branch `main`.
-3. App name: `mcp-teams`.
-4. Framework: **Next.js** (SSR / compute). Monorepo: app root can stay repo root; build uses `amplify.yml`.
-5. **Environment variables** (copy from local `.env`, never commit secrets):
+1. Open [https://console.aws.amazon.com/amplify](https://console.aws.amazon.com/amplify) — Azure is unrelated; use the AWS account that already hosts `sim.ntsa.uk`.
+2. App **mcp-teams.ntsa.uk** is WEB_COMPUTE (Next.js SSR). Source is currently CodeCommit `TeamsConnector` (GitHub connect needs a PAT).
+3. Monorepo: `AMPLIFY_MONOREPO_APP_ROOT=apps/web`. Build spec is root `amplify.yml` (`applications.appRoot: apps/web`; `npm ci` from the workspace root).
+4. **Environment variables** (copy from local `.env`, never commit secrets):
 
 | Key | Notes |
 |---|---|
+| `AMPLIFY_MONOREPO_APP_ROOT` | `apps/web` |
 | `NODE_ENV` | `production` |
 | `MCP_TRANSPORT` | `http` |
 | `AZURE_TENANT_ID` | Entra |
@@ -28,7 +28,7 @@ This machine has no AWS CLI. Create the app in the AWS console:
 | `TRANSCRIPT_POLL_MS` | `15000` |
 | `XAI_API_KEY` | optional |
 
-6. Save and deploy. First URL is `https://main.xxxx.amplifyapp.com`.
+5. First URL is `https://main.dwn8q7r62chx6.amplifyapp.com`.
 
 ## 2. Custom domain mcp-teams.ntsa.uk
 
@@ -36,7 +36,7 @@ This machine has no AWS CLI. Create the app in the AWS console:
 2. Domain: `ntsa.uk` (or add subdomain only if Amplify asks).
 3. Subdomain: `mcp-teams` → HTTPS (Amplify-managed cert).
 4. Amplify shows a **CNAME** (and maybe a domain verification CNAME).
-5. In **ntsa.uk DNS** (wherever that zone lives — Cloudflare, Route 53, registrar):
+5. In **ntsa.uk DNS** (Talk Internet nameservers — same panel as `sim.ntsa.uk`, not this account’s Route 53):
 
 ```
 mcp-teams  CNAME  <amplify-given-target>
