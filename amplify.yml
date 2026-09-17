@@ -7,9 +7,7 @@ applications:
           commands:
             - nvm install 22
             - nvm use 22
-            - pwd
-            - cd ../.. && npm ci --include=dev
-            - cd ../.. && npm run build -w @teams-audio-join/shared && npm run build -w @teams-audio-join/store && npm run build -w @teams-audio-join/graph && npm run build -w @teams-audio-join/summarizer && npm run build -w @teams-audio-join/orchestrator && npm run build -w @teams-audio-join/workflows && npm run build -w @teams-audio-join/mcp-host
+            - cd ../.. && pwd && ls package.json package-lock.json && rm -rf node_modules && npm ci --include=dev && npm run build -w @teams-audio-join/shared && npm run build -w @teams-audio-join/store && npm run build -w @teams-audio-join/graph && npm run build -w @teams-audio-join/summarizer && npm run build -w @teams-audio-join/orchestrator && npm run build -w @teams-audio-join/workflows && npm run build -w @teams-audio-join/mcp-host
         build:
           commands:
             - cd ../.. && npm run build -w @teams-audio-join/web
