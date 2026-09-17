@@ -36,6 +36,7 @@ AzureTts? tts = string.IsNullOrWhiteSpace(speechKey) ? null : new AzureTts(speec
 var registry = new CallRegistry();
 var prompts = new PromptStore();
 var log = app.Logger;
+var transcriptPollers = new System.Collections.Concurrent.ConcurrentDictionary<string, CancellationTokenSource>();
 
 var sweep = new PeriodicTimer(TimeSpan.FromSeconds(30));
 _ = Task.Run(async () =>
@@ -52,6 +53,7 @@ app.Lifetime.ApplicationStopping.Register(() =>
         try { graph.DeleteCallAsync(callId).GetAwaiter().GetResult(); }
         catch { /* best-effort hangup */ }
         registry.Remove(sessionId);
+        if (transcriptPollers.TryRemove(sessionId, out var ctsStop)) ctsStop.Cancel();
     }
 });
 
@@ -136,6 +138,7 @@ app.MapPost("/admit", async (AdmitRequest body) =>
     {
         var callId = await graph.CreateCallAsync(thread, body.OrganizerId, body.TenantId);
         registry.Track(body.SessionId, callId);
+        StartTranscriptPoll(body.SessionId, callId, body.OrganizerId, body.OnlineMeetingId);
         return Results.Json(new { videoSending = false, canHear = false, callId, state = "establishing" });
     }
     catch (Exception ex)
@@ -206,6 +209,7 @@ app.MapPost("/leave", async (SessionBody body) =>
         await graph.DeleteCallAsync(callId);
     }
     registry.Remove(body.SessionId);
+    if (transcriptPollers.TryRemove(body.SessionId, out var ctsLeave)) ctsLeave.Cancel();
     return Results.Json(new { closeLatencyMs = (int)(DateTime.UtcNow - started).TotalMilliseconds });
 });
 
@@ -239,7 +243,7 @@ async Task<IResult> StopPrompt(string sessionId, string? utteranceId)
 
 app.Run();
 
-async Task NotifyOrchestrator(string sessionId, string callId, string evt)
+async Task NotifyOrchestrator(string sessionId, string callId, string evt, object? cues = null)
 {
     if (string.IsNullOrWhiteSpace(orchestratorUrl)) return;
     try
@@ -250,13 +254,55 @@ async Task NotifyOrchestrator(string sessionId, string callId, string evt)
         {
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", workerSecret);
         }
-        req.Content = JsonContent.Create(new { sessionId, callId, @event = evt });
+        req.Content = JsonContent.Create(new { sessionId, callId, @event = evt, cues });
         await http.SendAsync(req);
     }
     catch
     {
         /* best-effort eject */
     }
+}
+
+void StartTranscriptPoll(string sessionId, string callId, string? organizerId, string? onlineMeetingId)
+{
+    if (graph is null || string.IsNullOrEmpty(organizerId) || string.IsNullOrEmpty(onlineMeetingId)) return;
+    var cts = new CancellationTokenSource();
+    if (!transcriptPollers.TryAdd(sessionId, cts))
+    {
+        cts.Cancel();
+        return;
+    }
+    _ = Task.Run(async () =>
+    {
+        var seen = new HashSet<string>();
+        while (!cts.IsCancellationRequested && registry.TryGetCall(sessionId, out _))
+        {
+            try
+            {
+                var vtts = await graph.ListTranscriptVttsAsync(organizerId, onlineMeetingId, cts.Token);
+                var cues = new List<object>();
+                foreach (var (id, vtt) in vtts)
+                {
+                    foreach (var cue in VttCueParser.Parse(vtt))
+                    {
+                        var key = $"{id}|{cue.TMs}|{cue.Text}";
+                        if (!seen.Add(key)) continue;
+                        cues.Add(new { text = cue.Text, speaker = cue.Speaker, tMs = cue.TMs, endMs = cue.EndMs, isPartial = false });
+                    }
+                }
+                if (cues.Count > 0)
+                {
+                    await NotifyOrchestrator(sessionId, callId, "transcript", cues);
+                }
+            }
+            catch (Exception ex)
+            {
+                log.LogInformation("transcript poll {Session}: {Error}", sessionId, ex.Message);
+            }
+            try { await Task.Delay(TimeSpan.FromSeconds(3), cts.Token); }
+            catch (OperationCanceledException) { break; }
+        }
+    }, cts.Token);
 }
 
 public sealed record AdmitRequest(
@@ -266,7 +312,8 @@ public sealed record AdmitRequest(
     string? JoinUrl = null,
     string? ThreadId = null,
     string? TenantId = null,
-    string? OrganizerId = null);
+    string? OrganizerId = null,
+    string? OnlineMeetingId = null);
 
 public sealed record PlayRequest(
     string SessionId,

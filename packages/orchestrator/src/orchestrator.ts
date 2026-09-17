@@ -263,6 +263,7 @@ export class Orchestrator {
 
   async getMeetingStatus(meta: CallMeta, raw: unknown): Promise<Envelope<GetMeetingStatusResponse>> {
     const { sessionId } = validateStatus(raw);
+    await this.refreshTranscripts(sessionId);
     const session = await this.requireSession(sessionId, meta);
     const data: GetMeetingStatusResponse = {
       sessionId: session.sessionId,
@@ -283,6 +284,7 @@ export class Orchestrator {
 
   async getTranscript(meta: CallMeta, raw: unknown): Promise<Envelope<GetTranscriptResponse>> {
     const req = validateGetTranscript(raw);
+    await this.refreshTranscripts(req.sessionId);
     const session = await this.requireSession(req.sessionId, meta);
     const sinceSeq = req.sinceSeq ?? 0;
     const segments = await this.store.listSegments(
@@ -503,12 +505,64 @@ export class Orchestrator {
     }
   }
 
-  async handleMediaEvent(sessionId: string, event: "established" | "ejected"): Promise<void> {
+  async handleMediaEvent(
+    sessionId: string,
+    event: "established" | "ejected" | "transcript",
+    cues?: { text: string; speaker?: string; tMs?: number; endMs?: number; isPartial?: boolean }[],
+  ): Promise<void> {
     const session = await this.store.getSession(sessionId);
     if (!session) return;
     if (event === "established") return;
+    if (event === "transcript") {
+      await this.ingestLiveCues(session, cues ?? []);
+      return;
+    }
     if (session.state === "ended" || session.state === "failed") return;
     await this.finalizeLeave(session, "ejected");
+  }
+
+  private async ingestLiveCues(
+    session: SessionRecord,
+    cues: { text: string; speaker?: string; tMs?: number; endMs?: number; isPartial?: boolean }[],
+  ): Promise<void> {
+    if (session.state === "ended" || session.state === "failed") return;
+    const currentMax = await this.store.maxSeq(session.sessionId);
+    const existing = await this.store.listSegments(session.sessionId, 0, true, 500);
+    const seen = new Set(existing.map((s) => `${s.tMs}|${s.text}`));
+    const classified = classifyCaptions(
+      cues
+        .filter((c) => c.text?.trim())
+        .map((c) => ({
+          tMs: c.tMs ?? 0,
+          endMs: c.endMs ?? c.tMs ?? 0,
+          speaker: c.speaker || "Speaker 1",
+          text: c.text,
+          isPartial: c.isPartial,
+        })),
+      currentMax,
+      this.assistantDisplayName,
+      this.wakePhrases,
+      this.runtime(session.sessionId).played,
+    ).filter((s) => !seen.has(`${s.tMs}|${s.text}`));
+    if (classified.length) {
+      await this.store.appendSegments(session.sessionId, classified);
+      await this.events.emit(
+        makeEvent({
+          type: "transcript.delta",
+          tenantId: session.tenantId,
+          sessionId: session.sessionId,
+          agentId: session.agentId,
+          payload: { segments: classified.slice(0, 50) },
+        }),
+      );
+    }
+    const fresh = (await this.store.getSession(session.sessionId)) ?? session;
+    if (!fresh.capabilities.canHear && (classified.length > 0 || cues.some((c) => c.text?.trim()))) {
+      fresh.capabilities = { ...fresh.capabilities, canHear: true, stt: "live" };
+      if (fresh.state === "listening_deaf") fresh.state = "listening";
+      await this.store.putSession(fresh);
+      await this.emitUpdated(fresh);
+    }
   }
 
   private async finalizeLeave(session: SessionRecord, reason: EndedReason): Promise<string | undefined> {
@@ -981,6 +1035,7 @@ export class Orchestrator {
         : undefined,
       tenantId: session.tenantId,
       organizerId: session.meeting.organizer?.id,
+      onlineMeetingId: session.meeting.onlineMeetingId,
     };
     try {
       return await this.mediaWorker.admit(session.sessionId, opts);

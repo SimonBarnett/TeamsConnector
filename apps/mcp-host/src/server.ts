@@ -100,9 +100,13 @@ export async function dispatchHttp(
       if (!allowed) {
         return json(401, { ok: false, error: { code: "unauthenticated", message: "media-event unauthorized", retryable: false } });
       }
-      const body = JSON.parse(input.body || "{}") as { sessionId?: string; event?: string };
-      if (body.sessionId && (body.event === "ejected" || body.event === "established")) {
-        await orch.handleMediaEvent(body.sessionId, body.event);
+      const body = JSON.parse(input.body || "{}") as {
+        sessionId?: string;
+        event?: string;
+        cues?: { text: string; speaker?: string; tMs?: number; endMs?: number; isPartial?: boolean }[];
+      };
+      if (body.sessionId && (body.event === "ejected" || body.event === "established" || body.event === "transcript")) {
+        await orch.handleMediaEvent(body.sessionId, body.event, body.cues);
       }
       return json(200, { ok: true });
     }

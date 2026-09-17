@@ -488,4 +488,20 @@ describe("Orchestrator", () => {
     expect(session?.state).toBe("ended");
     expect(session?.endedReason).toBe("ejected");
   });
+
+  it("live transcript media-events set canHear and append cues", async () => {
+    const { orch, sessionId, store } = await speakHarness();
+    await orch.handleMediaEvent(sessionId, "transcript", [
+      { text: "The test phrase is mirror-44", speaker: "Simon", tMs: 1000, endMs: 2500 },
+    ]);
+    const session = await store.getSession(sessionId);
+    expect(session?.capabilities.canHear).toBe(true);
+    expect(["live", "official"]).toContain(session?.capabilities.stt);
+    const tx = await orch.call("get_transcript", { sessionId }, testMeta());
+    expect(tx.ok).toBe(true);
+    if (!tx.ok) return;
+    const segs = (tx.data as { segments: { text: string }[]; canHear: boolean }).segments;
+    expect(segs.some((s) => s.text.includes("mirror-44"))).toBe(true);
+    expect((tx.data as { canHear: boolean }).canHear).toBe(true);
+  });
 });

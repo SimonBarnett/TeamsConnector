@@ -5,6 +5,7 @@ export interface MediaAdmitOpts {
   threadId?: string;
   tenantId?: string;
   organizerId?: string;
+  onlineMeetingId?: string;
 }
 
 export interface PlayCommand {

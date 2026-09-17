@@ -174,6 +174,41 @@ public sealed class GraphJoinClient
         }
     }
 
+    public async Task<IReadOnlyList<(string Id, string Vtt)>> ListTranscriptVttsAsync(
+        string organizerUserId,
+        string onlineMeetingId,
+        CancellationToken ct = default)
+    {
+        var token = await GetTokenAsync(ct).ConfigureAwait(false);
+        var listUrl =
+            $"https://graph.microsoft.com/v1.0/users/{Uri.EscapeDataString(organizerUserId)}/onlineMeetings/{Uri.EscapeDataString(onlineMeetingId)}/transcripts";
+        using var listReq = new HttpRequestMessage(HttpMethod.Get, listUrl);
+        listReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var listRes = await _http.SendAsync(listReq, ct).ConfigureAwait(false);
+        if (listRes.StatusCode == System.Net.HttpStatusCode.NotFound) return [];
+        var listText = await listRes.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (!listRes.IsSuccessStatusCode) return [];
+        using var doc = JsonDocument.Parse(listText);
+        if (!doc.RootElement.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+        var outList = new List<(string Id, string Vtt)>();
+        foreach (var t in value.EnumerateArray())
+        {
+            var id = t.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            if (string.IsNullOrEmpty(id)) continue;
+            var contentUrl =
+                $"https://graph.microsoft.com/v1.0/users/{Uri.EscapeDataString(organizerUserId)}/onlineMeetings/{Uri.EscapeDataString(onlineMeetingId)}/transcripts/{Uri.EscapeDataString(id)}/content?$format=text/vtt";
+            using var cReq = new HttpRequestMessage(HttpMethod.Get, contentUrl);
+            cReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var cRes = await _http.SendAsync(cReq, ct).ConfigureAwait(false);
+            if (!cRes.IsSuccessStatusCode) continue;
+            outList.Add((id, await cRes.Content.ReadAsStringAsync(ct).ConfigureAwait(false)));
+        }
+        return outList;
+    }
+
     private async Task<string> GetTokenAsync(CancellationToken ct)
     {
         if (_token is not null && _tokenExpires > DateTimeOffset.UtcNow.AddMinutes(2)) return _token;
