@@ -7,10 +7,12 @@ applications:
           commands:
             - nvm install 22
             - nvm use 22
-            - cd ../.. && pwd && NPM_CONFIG_PRODUCTION=false npm ci --include=dev
+            - pwd
+            - NPM_CONFIG_PRODUCTION=false npm ci --prefix ../.. --include=dev
         build:
           commands:
-            - cd ../.. && npm run build -w @teams-audio-join/web
+            - pwd
+            - npm run build --prefix ../.. -w @teams-audio-join/web
       artifacts:
         baseDirectory: .next
         files:
