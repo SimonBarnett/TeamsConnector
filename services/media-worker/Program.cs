@@ -32,11 +32,13 @@ GraphJoinClient? graph = string.IsNullOrWhiteSpace(tenant) || string.IsNullOrWhi
     ? null
     : new GraphJoinClient(tenant, clientId, clientSecret, callback);
 AzureTts? tts = string.IsNullOrWhiteSpace(speechKey) ? null : new AzureTts(speechKey, speechRegion);
+AzureStt? stt = string.IsNullOrWhiteSpace(speechKey) ? null : new AzureStt(speechKey, speechRegion);
 
 var registry = new CallRegistry();
 var prompts = new PromptStore();
 var log = app.Logger;
 var transcriptPollers = new System.Collections.Concurrent.ConcurrentDictionary<string, CancellationTokenSource>();
+var hearPumps = new System.Collections.Concurrent.ConcurrentDictionary<string, LiveHearPump>();
 
 var sweep = new PeriodicTimer(TimeSpan.FromSeconds(30));
 _ = Task.Run(async () =>
@@ -54,6 +56,7 @@ app.Lifetime.ApplicationStopping.Register(() =>
         catch { /* best-effort hangup */ }
         registry.Remove(sessionId);
         if (transcriptPollers.TryRemove(sessionId, out var ctsStop)) ctsStop.Cancel();
+        if (hearPumps.TryRemove(sessionId, out var pumpStop)) pumpStop.Dispose();
     }
 });
 
@@ -139,6 +142,7 @@ app.MapPost("/admit", async (AdmitRequest body) =>
         var callId = await graph.CreateCallAsync(thread, body.OrganizerId, body.TenantId);
         registry.Track(body.SessionId, callId);
         StartTranscriptPoll(body.SessionId, callId, body.OrganizerId, body.OnlineMeetingId);
+        StartLiveHear(body.SessionId, callId);
         return Results.Json(new { videoSending = false, canHear = false, callId, state = "establishing" });
     }
     catch (Exception ex)
@@ -210,6 +214,7 @@ app.MapPost("/leave", async (SessionBody body) =>
     }
     registry.Remove(body.SessionId);
     if (transcriptPollers.TryRemove(body.SessionId, out var ctsLeave)) ctsLeave.Cancel();
+    if (hearPumps.TryRemove(body.SessionId, out var pumpLeave)) pumpLeave.Dispose();
     return Results.Json(new { closeLatencyMs = (int)(DateTime.UtcNow - started).TotalMilliseconds });
 });
 
@@ -261,6 +266,20 @@ async Task NotifyOrchestrator(string sessionId, string callId, string evt, objec
     {
         /* best-effort eject */
     }
+}
+
+void StartLiveHear(string sessionId, string callId)
+{
+    if (stt is null) return;
+    var ring = new AudioRingBuffer();
+    var pump = new LiveHearPump(ring, stt, async text =>
+    {
+        await NotifyOrchestrator(sessionId, callId, "transcript", new[]
+        {
+            new { text, speaker = "Speaker 1", tMs = 0, isPartial = false },
+        });
+    });
+    if (!hearPumps.TryAdd(sessionId, pump)) pump.Dispose();
 }
 
 void StartTranscriptPoll(string sessionId, string callId, string? organizerId, string? onlineMeetingId)
