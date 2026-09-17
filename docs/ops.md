@@ -2,7 +2,7 @@
 
 ## Persistence
 
-Set `DATABASE_URL` to use `PgStore` (docker compose postgres:16). `/ready` postgres is green only after `SELECT 1` succeeds. Unset URL = in-memory. Production must set `ARTIFACT_ENCRYPTION_KEY` (32-byte base64). TTL default 14 days; audit is not swept.
+Set `DATABASE_URL` to use `PgStore` (RDS `teams-audio-join` in `eu-west-2`, or docker compose postgres:16). `/ready` postgres is green only after `SELECT 1` succeeds. Unset URL = in-memory (Amplify compute will drop sessions between instances). Production must set `ARTIFACT_ENCRYPTION_KEY` (32-byte base64) and `MCP_HTTP_SECRET`. TTL default 14 days; audit is not swept.
 
 `GET /ready` is the install doctor (`npm run doctor`). `GET /health` is liveness only.
 

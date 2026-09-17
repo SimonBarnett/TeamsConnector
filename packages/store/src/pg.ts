@@ -1,8 +1,6 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { LIVE_STATES, type Artifact, type SessionRecord, type StandingRoutine, type TranscriptSegment } from "@teams-audio-join/shared";
 import type { EnvelopeCipher } from "./crypto.ts";
+import { SCHEMA_SQL } from "./schema.ts";
 import type {
   AuditEvent,
   ConnectionRecord,
@@ -25,7 +23,10 @@ export class PgStore implements ConnectorStore {
 
   static async connect(databaseUrl: string, cipher: EnvelopeCipher): Promise<PgStore> {
     const pg = await import("pg");
-    const pool = new pg.default.Pool({ connectionString: databaseUrl }) as unknown as PgPool;
+    const pool = new pg.default.Pool({
+      connectionString: databaseUrl,
+      ssl: /amazonaws\.com/i.test(databaseUrl) ? { rejectUnauthorized: false } : undefined,
+    }) as unknown as PgPool;
     const store = new PgStore(pool, cipher);
     await store.migrate();
     await pool.query("SELECT 1");
@@ -35,7 +36,11 @@ export class PgStore implements ConnectorStore {
   static async ping(databaseUrl: string): Promise<boolean> {
     try {
       const pg = await import("pg");
-      const pool = new pg.default.Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 3000 });
+      const pool = new pg.default.Pool({
+        connectionString: databaseUrl,
+        connectionTimeoutMillis: 3000,
+        ssl: /amazonaws\.com/i.test(databaseUrl) ? { rejectUnauthorized: false } : undefined,
+      });
       await pool.query("SELECT 1");
       await pool.end();
       return true;
@@ -45,9 +50,7 @@ export class PgStore implements ConnectorStore {
   }
 
   private async migrate(): Promise<void> {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const sql = readFileSync(join(here, "schema.sql"), "utf8");
-    await this.pool.query(sql);
+    await this.pool.query(SCHEMA_SQL);
   }
 
   async getTenant(tenantId: string) {
