@@ -5,6 +5,7 @@ export const KNOWN_ENV = [
   "NODE_ENV",
   "MCP_TRANSPORT",
   "MCP_HTTP_PORT",
+  "MCP_HTTP_SECRET",
   "LOG_LEVEL",
   "DEMO_FIXTURE",
   "DEMO_TENANT_ID",
@@ -49,6 +50,7 @@ export interface HostConfig {
     graphUserId: string;
   };
   mediaWorkerSecret?: string;
+  mcpHttpSecret?: string;
   assistantDisplayName: string;
   xaiKey?: string;
   xaiBaseUrl?: string;
@@ -130,6 +132,7 @@ export function parseHostConfig(env: NodeJS.ProcessEnv = process.env): HostConfi
     if (env.AZURE_CLIENT_CERTIFICATE) cfg.azure.clientCertificate = env.AZURE_CLIENT_CERTIFICATE;
   }
   if (env.MEDIA_WORKER_SECRET) cfg.mediaWorkerSecret = env.MEDIA_WORKER_SECRET;
+  if (env.MCP_HTTP_SECRET) cfg.mcpHttpSecret = env.MCP_HTTP_SECRET;
   if (env.XAI_API_KEY) cfg.xaiKey = env.XAI_API_KEY;
   if (env.XAI_BASE_URL) cfg.xaiBaseUrl = env.XAI_BASE_URL;
   if (env.XAI_MODEL) cfg.xaiModel = env.XAI_MODEL;
@@ -159,5 +162,8 @@ export function assertHostConfig(cfg: HostConfig): void {
   }
   if (cfg.nodeEnv === "production" && cfg.mode === "fixture-loopback") {
     throw new Error("Production cannot run fixture-loopback. Set AZURE_* and GRAPH_USER_ID.");
+  }
+  if (cfg.nodeEnv === "production" && !cfg.mcpHttpSecret) {
+    throw new Error("MCP_HTTP_SECRET is required in production (Bearer for POST /mcp).");
   }
 }

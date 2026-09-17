@@ -127,6 +127,22 @@ export async function runDoctor(cfg: HostConfig, opts?: { graphProbe?: () => Pro
     checks.push({ name: "calendar", ok: true, detail: "unset — FakeCalendar / no trigger" });
   }
 
+  if (cfg.nodeEnv === "production") {
+    checks.push({
+      name: "mcp_auth",
+      ok: Boolean(cfg.mcpHttpSecret),
+      detail: cfg.mcpHttpSecret
+        ? "MCP_HTTP_SECRET set — POST /mcp requires Bearer"
+        : "MCP_HTTP_SECRET missing — POST /mcp would be open",
+    });
+  } else {
+    checks.push({
+      name: "mcp_auth",
+      ok: true,
+      detail: cfg.mcpHttpSecret ? "MCP_HTTP_SECRET set" : "unset — POST /mcp open (dev)",
+    });
+  }
+
   if (cfg.unknownKeys.length) {
     checks.push({
       name: "env",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { composeFromEnv } from "./compose.ts";
-import { createHttpServer, handleRpc } from "./server.ts";
+import { createHttpServer, dispatchHttp, handleRpc, mergeCallMeta } from "./server.ts";
 
 describe("MCP host", () => {
   it("lists the seven spec tools and serves join_meeting", async () => {
@@ -127,5 +127,77 @@ describe("MCP host", () => {
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
     }
+  });
+
+  it("fills CallMeta from the seeded demo tenant when Grok omits it", async () => {
+    const { orch, httpHooks } = await composeFromEnv({ DEMO_FIXTURE: "1", NODE_ENV: "test" });
+    const grokStyle = (await handleRpc(
+      orch,
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "join_meeting",
+          arguments: { onlineMeetingId: "om-priority", mode: "listen_speak", announce: false },
+          _meta: { progressToken: "pt-1" },
+        },
+      },
+      { defaultMeta: httpHooks.defaultMeta },
+    )) as { result: { content: { text: string }[]; isError: boolean } };
+    expect(grokStyle.result.isError).toBe(false);
+    const envelope = JSON.parse(grokStyle.result.content[0]!.text) as { ok: boolean };
+    expect(envelope.ok).toBe(true);
+  });
+
+  it("requires Bearer MCP_HTTP_SECRET on POST /mcp and leaves GET /ready open", async () => {
+    const { orch, doctor } = await composeFromEnv({ DEMO_FIXTURE: "1", NODE_ENV: "test" });
+    const secret = "mcp-test-secret";
+    const listed = { jsonrpc: "2.0", id: 1, method: "tools/list" };
+    const denied = await dispatchHttp(orch, { doctor, mcpSecret: secret }, {
+      method: "POST",
+      url: "/mcp",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(listed),
+    });
+    expect(denied.status).toBe(401);
+    const allowed = await dispatchHttp(orch, { doctor, mcpSecret: secret }, {
+      method: "POST",
+      url: "/mcp",
+      headers: { "content-type": "application/json", authorization: `Bearer ${secret}` },
+      body: JSON.stringify(listed),
+    });
+    expect(allowed.status).toBe(200);
+    const ready = await dispatchHttp(orch, { doctor, mcpSecret: secret }, {
+      method: "GET",
+      url: "/ready",
+      headers: { accept: "application/json" },
+      body: "",
+    });
+    expect(ready.status).toBe(200);
+  });
+});
+
+describe("mergeCallMeta", () => {
+  const defaults = {
+    tenantId: "9792d1d6-9123-4e4c-ae29-ca81bc02d3de",
+    userId: "784a6dfe-a8a1-4618-8fdc-e4bad35ec455",
+    agentId: "haitch",
+    meetingConfirmed: true,
+  };
+
+  it("uses defaults when MCP _meta has only a progressToken", () => {
+    expect(mergeCallMeta({ progressToken: "x" }, defaults)).toEqual(defaults);
+  });
+
+  it("keeps an explicit tenant overlay", () => {
+    const merged = mergeCallMeta({ tenantId: "11111111-2222-3333-4444-555555555555", agentId: "eshbel" }, defaults) as {
+      tenantId: string;
+      agentId: string;
+      userId: string;
+    };
+    expect(merged.tenantId).toBe("11111111-2222-3333-4444-555555555555");
+    expect(merged.agentId).toBe("eshbel");
+    expect(merged.userId).toBe(defaults.userId);
   });
 });

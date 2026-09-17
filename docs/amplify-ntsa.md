@@ -16,6 +16,7 @@ AWS CLI is on this machine (`eu-west-2`). App id `dwn8q7r62chx6`, default domain
 | `AMPLIFY_MONOREPO_APP_ROOT` | `apps/web` |
 | `NODE_ENV` | `production` |
 | `MCP_TRANSPORT` | `http` |
+| `MCP_HTTP_SECRET` | Bearer for `POST /mcp` (required in production). Not the media-worker secret. |
 | `AZURE_TENANT_ID` | Entra |
 | `AZURE_CLIENT_ID` | |
 | `AZURE_CLIENT_SECRET` | |
@@ -48,7 +49,14 @@ TTL 300 until it works. Wait for SSL **Available**.
 
 ## 3. Grok / MCP client
 
-Point the MCP HTTP endpoint at `https://mcp-teams.ntsa.uk/mcp`.
+```toml
+[mcp_servers.teams]
+url = "https://mcp-teams.ntsa.uk/mcp"
+headers = { Authorization = "Bearer <MCP_HTTP_SECRET>" }
+enabled = true
+```
+
+Or `grok mcp add --transport http teams https://mcp-teams.ntsa.uk/mcp --header "Authorization: Bearer <MCP_HTTP_SECRET>"`.
 
 ## 4. What still stays off Amplify
 

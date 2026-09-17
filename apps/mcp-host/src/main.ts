@@ -4,7 +4,7 @@ import { composeFromEnv } from "./compose.ts";
 import { createHttpServer, serveStdio } from "./server.ts";
 
 loadDotenv();
-const { orch, cfg, doctor, banner } = await composeFromEnv();
+const { orch, cfg, doctor, banner, httpHooks } = await composeFromEnv();
 process.stderr.write(`${banner}\n`);
 
 if (process.argv.includes("doctor") || process.env.MCP_DOCTOR === "1") {
@@ -21,15 +21,13 @@ process.on("SIGINT", () => onStop("SIGINT"));
 process.on("SIGTERM", () => onStop("SIGTERM"));
 
 if (cfg.transport === "http") {
-  const server = createHttpServer(orch, {
-    doctor,
-    includeWorkflows: cfg.workflowTrigger,
-    production: cfg.nodeEnv === "production",
-    mediaSecret: cfg.mediaWorkerSecret,
-  });
+  const server = createHttpServer(orch, httpHooks);
   server.listen(cfg.httpPort, () => {
     process.stderr.write(`MCP HTTP :${cfg.httpPort}  GET /ready for doctor\n`);
   });
 } else {
-  await serveStdio(orch, { includeWorkflows: cfg.workflowTrigger });
+  await serveStdio(orch, {
+    includeWorkflows: httpHooks.includeWorkflows,
+    defaultMeta: httpHooks.defaultMeta,
+  });
 }

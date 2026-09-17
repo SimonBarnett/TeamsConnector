@@ -174,11 +174,29 @@ export async function composeFromEnv(env: NodeJS.ProcessEnv = process.env): Prom
     .filter(Boolean)
     .join(" | ");
 
+  const defaultMeta = cfg.azure
+    ? {
+        tenantId: cfg.azure.tenantId,
+        userId: cfg.azure.graphUserId,
+        agentId: "haitch",
+        meetingConfirmed: true as const,
+      }
+    : cfg.demo
+      ? {
+          tenantId: env.DEMO_TENANT_ID ?? "11111111-2222-3333-4444-555555555555",
+          userId: env.DEMO_USER_ID ?? "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+          agentId: "haitch",
+          meetingConfirmed: true as const,
+        }
+      : undefined;
+
   const httpHooks: HostHttpHooks = {
     doctor,
     includeWorkflows: cfg.workflowTrigger,
     production: cfg.nodeEnv === "production",
     mediaSecret: cfg.mediaWorkerSecret,
+    mcpSecret: cfg.mcpHttpSecret,
+    defaultMeta,
   };
   return { cfg, orch, doctor, banner, httpHooks };
 }

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage } from "node:http";
 import { listedMcpTools, type Envelope } from "@teams-audio-join/shared";
 import type { Orchestrator } from "@teams-audio-join/orchestrator";
@@ -106,8 +107,27 @@ export async function dispatchHttp(
       return json(200, { ok: true });
     }
     if (method === "POST" && (path === "/mcp" || path === "/")) {
+      if (hooks?.mcpSecret) {
+        if (!bearerMatches(header(input.headers, "authorization"), hooks.mcpSecret)) {
+          return json(401, {
+            ok: false,
+            error: { code: "unauthenticated", message: "mcp unauthorized", retryable: false },
+          });
+        }
+      } else if (hooks?.production) {
+        return json(401, {
+          ok: false,
+          error: { code: "unauthenticated", message: "mcp unauthorized", retryable: false },
+        });
+      }
       const msg = JSON.parse(input.body || "{}") as JsonRpcReq;
-      return json(200, await handleRpc(orch, msg, { includeWorkflows: hooks?.includeWorkflows }));
+      return json(
+        200,
+        await handleRpc(orch, msg, {
+          includeWorkflows: hooks?.includeWorkflows,
+          defaultMeta: hooks?.defaultMeta,
+        }),
+      );
     }
     return json(404, {
       ok: false,
@@ -168,14 +188,66 @@ function htmlPage(title: string, body: string): string {
 </html>`;
 }
 
+export interface DefaultCallMeta {
+  tenantId: string;
+  userId: string;
+  agentId: string;
+  meetingConfirmed: boolean;
+}
+
 export interface HostHttpHooks {
   doctor?: () => Promise<DoctorReport>;
   includeWorkflows?: boolean;
   production?: boolean;
   mediaSecret?: string;
+  mcpSecret?: string;
+  defaultMeta?: DefaultCallMeta;
 }
 
-export async function handleRpc(orch: Orchestrator, msg: JsonRpcReq, opts?: { includeWorkflows?: boolean }): Promise<unknown> {
+export interface RpcOpts {
+  includeWorkflows?: boolean;
+  defaultMeta?: DefaultCallMeta;
+}
+
+const CALL_META_KEYS = [
+  "tenantId",
+  "userId",
+  "agentId",
+  "requestId",
+  "idempotencyKey",
+  "meetingConfirmed",
+  "confirmStanding",
+] as const;
+
+/** Grok HTTP MCP sends `_meta.progressToken`, not CallMeta. Fill the seeded tenant when those fields are absent. */
+export function mergeCallMeta(raw: unknown, defaults?: DefaultCallMeta): unknown {
+  const obj = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const picked: Record<string, unknown> = {};
+  for (const k of CALL_META_KEYS) {
+    if (obj[k] !== undefined) picked[k] = obj[k];
+  }
+  if (!defaults) return Object.keys(picked).length ? picked : obj;
+  return {
+    tenantId: picked.tenantId ?? defaults.tenantId,
+    userId: picked.userId ?? defaults.userId,
+    agentId: picked.agentId ?? defaults.agentId,
+    meetingConfirmed: picked.meetingConfirmed ?? defaults.meetingConfirmed,
+    ...(picked.requestId !== undefined ? { requestId: picked.requestId } : {}),
+    ...(picked.idempotencyKey !== undefined ? { idempotencyKey: picked.idempotencyKey } : {}),
+    ...(picked.confirmStanding !== undefined ? { confirmStanding: picked.confirmStanding } : {}),
+  };
+}
+
+function bearerMatches(authorization: string, secret: string): boolean {
+  const prefix = "Bearer ";
+  if (!authorization.startsWith(prefix) || !secret) return false;
+  const got = Buffer.from(authorization.slice(prefix.length));
+  const want = Buffer.from(secret);
+  if (got.length !== want.length) return false;
+  return timingSafeEqual(got, want);
+}
+
+export async function handleRpc(orch: Orchestrator, msg: JsonRpcReq, opts?: RpcOpts): Promise<unknown> {
   const id = msg.id ?? null;
   if (msg.method === "initialize") {
     return {
@@ -203,7 +275,7 @@ export async function handleRpc(orch: Orchestrator, msg: JsonRpcReq, opts?: { in
   if (msg.method === "tools/call") {
     const name = msg.params?.name ?? "";
     const args = msg.params?.arguments ?? {};
-    const meta = msg.params?.meta ?? msg.params?._meta ?? {};
+    const meta = mergeCallMeta(msg.params?.meta ?? msg.params?._meta ?? {}, opts?.defaultMeta);
     const envelope: Envelope<unknown> = await orch.call(name, args, meta);
     return {
       jsonrpc: "2.0",
@@ -318,7 +390,7 @@ function writeStdioFrame(msg: unknown): void {
   process.stdout.write(json);
 }
 
-export async function serveStdio(orch: Orchestrator, opts?: { includeWorkflows?: boolean }): Promise<void> {
+export async function serveStdio(orch: Orchestrator, opts?: RpcOpts): Promise<void> {
   let buf = Buffer.alloc(0);
   process.stdin.on("data", (chunk: Buffer) => {
     buf = Buffer.concat([buf, chunk]);

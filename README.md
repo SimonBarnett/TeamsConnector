@@ -59,7 +59,7 @@ Demo MCP (fixture Graph meeting, no Azure — **Teams attendees will not hear TT
 npm start
 ```
 
-Public MCP HTTP for Grok: host `apps/web` on AWS Amplify at `mcp-teams.ntsa.uk` — see `docs/amplify-ntsa.md`. Amplify does **not** replace the Windows media worker.
+Public MCP HTTP for Grok: host `apps/web` on AWS Amplify at `mcp-teams.ntsa.uk` — see `docs/amplify-ntsa.md`. Production `POST /mcp` requires `Authorization: Bearer $MCP_HTTP_SECRET`. Amplify does **not** replace the Windows media worker. Grok MCP `_meta` is not our CallMeta; the host fills the seeded Entra tenant/user (`agentId=haitch`, `meetingConfirmed=true`).
 
 HTTP transport (`GET /ready` is the doctor):
 

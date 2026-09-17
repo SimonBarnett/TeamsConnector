@@ -57,5 +57,13 @@ describe("parseHostConfig", () => {
         mode: "graph-notes-only",
       }),
     ).toThrow(/32 bytes/);
+    expect(() =>
+      assertHostConfig({
+        ...parseHostConfig({ NODE_ENV: "production" }),
+        nodeEnv: "production",
+        encryptionKey: KEY32,
+        mode: "graph-notes-only",
+      }),
+    ).toThrow(/MCP_HTTP_SECRET/);
   });
 });

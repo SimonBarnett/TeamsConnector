@@ -8,6 +8,7 @@ describe("runDoctor", () => {
     expect(report.mode).toBe("fixture-loopback");
     expect(report.checks.find((c) => c.name === "media")?.detail).toMatch(/loopback/);
     expect(report.checks.find((c) => c.name === "postgres")?.detail).toMatch(/orphan/);
+    expect(report.checks.find((c) => c.name === "mcp_auth")?.detail).toMatch(/unset/);
     expect(formatDoctor(report)).toContain("mode=fixture-loopback");
   });
 

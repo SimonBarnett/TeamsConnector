@@ -17,6 +17,8 @@ npm run doctor
 
 `npm run doctor` (or `GET /ready` on HTTP) must be green before a tenant demo. It will tell you if you are still on **fixture-loopback** (process-local speak; Teams humans will not hear it).
 
+Production HTTP (`mcp-teams.ntsa.uk`): set `MCP_HTTP_SECRET` and send `Authorization: Bearer <secret>` on `POST /mcp`. `GET /ready` stays public. Grok MCP `_meta` does not include our CallMeta — the host fills `tenantId` / `userId` / `agentId=haitch` / `meetingConfirmed` from the seeded Entra app.
+
 ## Entra
 
 1. Register `teams-audio-join-connector`.
