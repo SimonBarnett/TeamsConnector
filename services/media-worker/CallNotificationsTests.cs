@@ -30,5 +30,17 @@ public class CallNotificationsTests
               "resourceData":{"@odata.type":"#microsoft.graph.playPromptOperation","status":"completed"}}]}
             """);
         Assert.Contains(n, x => x.PlayCompleted && x.CallId == "c1");
+        Assert.DoesNotContain(n, x => x.Terminated);
+    }
+
+    [Fact]
+    public void PlayPromptOperationDeletedIsNotCallHangup()
+    {
+        var n = CallNotifications.Parse("""
+            {"value":[{"changeType":"deleted","resourceUrl":"/communications/calls/c1/operations/op-9",
+              "resourceData":{"@odata.type":"#microsoft.graph.playPromptOperation","status":"completed"}}]}
+            """);
+        Assert.Contains(n, x => x.CallId == "c1" && x.PlayCompleted);
+        Assert.DoesNotContain(n, x => x.Terminated);
     }
 }

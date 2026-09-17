@@ -116,7 +116,7 @@ app.MapPost("/callback", async (HttpRequest req) =>
             prompts.Complete(registry.PeekActivePrompt(sessionId));
             registry.ClearActivePrompt(sessionId);
         }
-        if (n.Terminated)
+        if (n.Terminated && !n.PlayCompleted)
         {
             registry.SetState(sessionId, CallLifecycle.Terminated);
             await NotifyOrchestrator(sessionId, n.CallId, "ejected");

@@ -15,6 +15,7 @@ public sealed record CallNotification(
 public static class CallNotifications
 {
     private static readonly Regex CallIdRe = new(@"/calls/([^/?]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex CallResourceRe = new(@"/calls/[^/?]+/?$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static IReadOnlyList<CallNotification> Parse(string json)
     {
@@ -66,8 +67,9 @@ public static class CallNotifications
         }
 
         var callId = ExtractCallId(resourceUrl) ?? GetString(el, "id");
+        var resourceIsCall = resourceUrl is not null && CallResourceRe.IsMatch(resourceUrl);
         var terminated =
-            string.Equals(changeType, "deleted", StringComparison.OrdinalIgnoreCase)
+            (string.Equals(changeType, "deleted", StringComparison.OrdinalIgnoreCase) && resourceIsCall)
             || string.Equals(state, "terminated", StringComparison.OrdinalIgnoreCase)
             || string.Equals(state, "terminating", StringComparison.OrdinalIgnoreCase);
         var established = string.Equals(state, "established", StringComparison.OrdinalIgnoreCase);
