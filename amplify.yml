@@ -7,12 +7,10 @@ applications:
           commands:
             - nvm install 22
             - nvm use 22
-            - cd ../..
-            - npm ci
+            - cd ../.. && npm ci
         build:
           commands:
-            - cd ../..
-            - npm run build -w @teams-audio-join/web
+            - cd ../.. && npm run build -w @teams-audio-join/web
       artifacts:
         baseDirectory: .next
         files:
