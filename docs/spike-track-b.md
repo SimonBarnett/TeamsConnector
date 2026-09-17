@@ -16,7 +16,7 @@ Exit criteria from the original spike (path A restated):
 - [x] Worker joins a scheduled test meeting (`POST /communications/calls` service-hosted) — 2026-09-16 attempt 1
 - [x] `speak({ text })` is heard as that text (not silence) via playPrompt — Simon heard `The test phrase is sunflower-42`
 - [x] Track A transcripts when Graph has a transcript resource; `canHear=true` with official cues (2026-09-17). Live captions ≠ Graph file — item appeared after transcription stopped + `EnableGraphTranscriptAccess`. `canHear=false` before that. **2026-09-17 live meeting:** `mirror-44` spoken with transcription on; `get_transcript` had only bot echo; `canHear=false`. Graph file is not real-time.
-- [ ] Path B hear: `Calls.AccessMedia.All` **granted** 2026-09-17. Worker has Azure STT + PCM ring (`LiveHearPump`) but **no RTP yet** (Skype Bots Media SDK is Windows + public IP; App Service Linux cannot receive mixed audio). Keep Path A `playPrompt` for speak.
+- [ ] Path B hear: `Calls.AccessMedia.All` **granted** 2026-09-17. Azure STT + PCM ring shipped. Windows `services/media-host` (Calls.Media 1.2.0.17950, audio Sendrecv) joins with `applicationHostedMediaConfig`, Recv PCM → STT, send TTS PCM (not playPrompt). Host is this PC (public `81.136.247.247`, LAN `192.168.1.125`, media TCP **8445**). Azure F1 stays on Path A until this host is healthy. **Do not** flip `plane=auto`. Needs: router TCP 8445 → `192.168.1.125`, DNS A `rtp-teams.ntsa.uk` → `81.136.247.247`, public CA cert (Let's Encrypt; self-signed often fails media TLS), public HTTPS `CALLBACK_URI` (forward 443 on the same FQDN, or a Talk Internet CNAME to a named Cloudflare tunnel).
 - [x] No WAV/PCM persisted in the Node artifact store (playPrompt WAV lives in the worker with GUID + TTL)
 - [x] 5 consecutive joins (table below) — **5 of 5** (same scheduled meeting, unique phrases)
 - [x] Admin consent friction written for **JoinGroupCall**, not AccessMedia
@@ -59,5 +59,5 @@ Doctor `/ready` was green (Graph + media healthy) before the join.
 ## Decision
 
 - [x] Path A: playPrompt egress + Track A hear
-- [ ] Path B: application-hosted media (deferred)
+- [ ] Path B: application-hosted media (Windows media-host on this PC; 8445 + cert + callback still required)
 - [ ] Signed for `plane=auto` → media — **not yet** (Track A `canHear` on/off still untested)

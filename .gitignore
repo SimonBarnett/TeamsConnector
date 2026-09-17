@@ -13,6 +13,8 @@ services/media-worker/bin/
 services/media-worker/obj/
 services/media-worker.tests/bin/
 services/media-worker.tests/obj/
+services/media-host/bin/
+services/media-host/obj/
 .DS_Store
 Thumbs.db
 *.pem
