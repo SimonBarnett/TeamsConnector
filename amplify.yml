@@ -8,12 +8,11 @@ applications:
             - nvm install 22
             - nvm use 22
             - pwd
-            - git rev-parse --show-toplevel
-            - cd "$(git rev-parse --show-toplevel)" && npm ci
-            - cd "$(git rev-parse --show-toplevel)" && npm run build -w @teams-audio-join/shared && npm run build -w @teams-audio-join/store && npm run build -w @teams-audio-join/graph && npm run build -w @teams-audio-join/summarizer && npm run build -w @teams-audio-join/orchestrator && npm run build -w @teams-audio-join/workflows && npm run build -w @teams-audio-join/mcp-host
+            - cd ../.. && npm ci --include=dev
+            - cd ../.. && npm run build -w @teams-audio-join/shared && npm run build -w @teams-audio-join/store && npm run build -w @teams-audio-join/graph && npm run build -w @teams-audio-join/summarizer && npm run build -w @teams-audio-join/orchestrator && npm run build -w @teams-audio-join/workflows && npm run build -w @teams-audio-join/mcp-host
         build:
           commands:
-            - cd "$(git rev-parse --show-toplevel)" && npm run build -w @teams-audio-join/web
+            - cd ../.. && npm run build -w @teams-audio-join/web
       artifacts:
         baseDirectory: .next
         files:
