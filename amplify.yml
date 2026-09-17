@@ -9,6 +9,7 @@ applications:
             - nvm use 22
             - pwd
             - NPM_CONFIG_PRODUCTION=false npm ci --prefix ../.. --include=dev
+            - node scripts/write-amplify-env.mjs
         build:
           commands:
             - pwd
