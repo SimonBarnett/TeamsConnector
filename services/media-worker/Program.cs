@@ -3,7 +3,13 @@ using System.Net.Http.Headers;
 using TeamsAudioJoin.MediaWorker;
 
 var builder = WebApplication.CreateBuilder(args);
-if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS"))
+var listenPort = Environment.GetEnvironmentVariable("WEBSITES_PORT")
+    ?? Environment.GetEnvironmentVariable("PORT");
+if (!string.IsNullOrWhiteSpace(listenPort))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{listenPort}");
+}
+else if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS"))
     && !args.Any(a => a.StartsWith("--urls", StringComparison.OrdinalIgnoreCase)))
 {
     builder.WebHost.UseUrls("http://127.0.0.1:7071");
