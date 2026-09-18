@@ -380,6 +380,9 @@ public sealed class HostedCall : IDisposable
     public void OnCallUpdated(ICall sender, ResourceEventArgs<Call> args)
     {
         var state = sender.Resource?.State;
+        System.Diagnostics.Trace.TraceInformation(
+            "call {0} session {1} state={2} result={3}",
+            sender.Id, SessionId, state, sender.Resource?.ResultInfo?.Message);
         if (state == CallState.Established)
         {
             Established = true;

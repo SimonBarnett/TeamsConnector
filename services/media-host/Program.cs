@@ -120,6 +120,7 @@ app.MapPost("/callback", async (HttpContext ctx) =>
 {
     ctx.Request.EnableBuffering();
     using var request = ToRequestMessage(ctx.Request);
+    log.LogInformation("graph callback {Uri} auth={Auth}", request.RequestUri, ctx.Request.Headers.ContainsKey("Authorization"));
     var response = await runtime.ProcessNotificationAsync(request);
     ctx.Response.StatusCode = (int)response.StatusCode;
     foreach (var header in response.Headers)
@@ -260,7 +261,19 @@ static HttpRequestMessage ToRequestMessage(HttpRequest req)
 {
     var message = new HttpRequestMessage();
     message.Method = new HttpMethod(req.Method);
-    message.RequestUri = new Uri($"{req.Scheme}://{req.Host}{req.Path}{req.QueryString}");
+    // ARR rewrites to http://127.0.0.1:7072; Graph signed the public HTTPS callback.
+    var callback = Environment.GetEnvironmentVariable("CALLBACK_URI")
+        ?? Environment.GetEnvironmentVariable("MEDIA_CALLBACK_URI");
+    Uri uri;
+    if (Uri.TryCreate(callback, UriKind.Absolute, out var cb))
+    {
+        uri = new Uri(cb, req.Path + req.QueryString);
+    }
+    else
+    {
+        uri = new Uri($"{req.Scheme}://{req.Host}{req.Path}{req.QueryString}");
+    }
+    message.RequestUri = uri;
     message.Content = new StreamContent(req.Body);
     foreach (var header in req.Headers)
     {
