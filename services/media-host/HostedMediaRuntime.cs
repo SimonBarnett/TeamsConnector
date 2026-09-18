@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.InteropServices;
@@ -72,6 +73,8 @@ public sealed class HostedMediaRuntime : IDisposable
             return false;
         }
         CertThumbprint = Certificate.Thumbprint;
+        Trace.Listeners.Add(new System.Diagnostics.TextWriterTraceListener(GraphCallFileLog.Path) { Name = "graph-call" });
+        Trace.AutoFlush = true;
 
         try
         {
@@ -302,12 +305,17 @@ public sealed class HostedMediaRuntime : IDisposable
     {
         using var store = new X509Store(StoreName.My, loc);
         store.Open(OpenFlags.ReadOnly);
-        var found = store.Certificates.Find(type, value, validOnly: false);
-        foreach (var cert in found)
+        foreach (X509Certificate2 cert in store.Certificates)
         {
-            if (cert.HasPrivateKey) return cert;
+            var match = type == X509FindType.FindByThumbprint
+                ? cert.Thumbprint.Equals(value, StringComparison.OrdinalIgnoreCase)
+                : cert.Subject.IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
+            if (match && cert.HasPrivateKey)
+            {
+                return new X509Certificate2(cert);
+            }
         }
-        return found.Count > 0 ? found[0] : null;
+        return null;
     }
 
     private static string? Env(string name)
@@ -380,9 +388,12 @@ public sealed class HostedCall : IDisposable
     public void OnCallUpdated(ICall sender, ResourceEventArgs<Call> args)
     {
         var state = sender.Resource?.State;
+        var info = sender.Resource?.ResultInfo;
         System.Diagnostics.Trace.TraceInformation(
             "call {0} session {1} state={2} result={3}",
-            sender.Id, SessionId, state, sender.Resource?.ResultInfo?.Message);
+            sender.Id, SessionId, state, info?.Message);
+        GraphCallFileLog.Line(
+            $"call {sender.Id} session {SessionId} state={state} resultCode={info?.Code} resultSubcode={info?.Subcode} result={info?.Message}");
         if (state == CallState.Established)
         {
             Established = true;

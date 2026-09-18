@@ -4,6 +4,8 @@ coverage/
 .env
 .env.local
 .env.production
+pathb-secrets.env
+zerossl-eab.json
 *.log
 .turbo/
 .idea/

@@ -119,6 +119,8 @@ app.MapGet("/health", () =>
 app.MapPost("/callback", async (HttpContext ctx) =>
 {
     ctx.Request.EnableBuffering();
+    await GraphCallFileLog.CallbackBodyAsync(ctx.Request.Body, ctx.RequestAborted);
+    ctx.Request.Body.Position = 0;
     using var request = ToRequestMessage(ctx.Request);
     log.LogInformation("graph callback {Uri} auth={Auth}", request.RequestUri, ctx.Request.Headers.ContainsKey("Authorization"));
     var response = await runtime.ProcessNotificationAsync(request);
