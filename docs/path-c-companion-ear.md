@@ -45,11 +45,12 @@ The bot never terminates Teams RTP. Microsoft’s media cloud is unused for hear
 - Dumping `.env` on IRC
 - Claiming live captions via Graph (that is still not real-time)
 
-## Build when executing
+## Built
 
-- `services/companion-ear` (WinForms or tray + WASAPI) **or** a documented `ffmpeg` one-liner for v0
-- Worker `POST /ear` + session bind
-- MCP `canHear` true only with companion heartbeat
-- Fixture: companion off → `canHear=false`; on + spoken phrase → cue
+- `services/companion-ear` — WASAPI loopback console (`NAudio`), 16 kHz mono WAV → `POST /ear`
+- media-host `POST /ear` + `GET /ear?sessionId=` (`EarHub`: heartbeat 15s → `canHear`)
+- Fixture: `EarHubTests` companion off → `canHear=false`; cue → stored
 
-IONOS can keep IIS/ARR and Path A; `Bob-TeamsMediaHost` stays installed but unused.
+IONOS: publish media-host (adds `/ear`; ARR already proxies all paths). Copy `companion-ear.exe` to the PC in the meeting. `Bob-TeamsMediaHost` can stay; Path B join is unused.
+
+`plane=auto` stays off until a human phrase (e.g. `mirror-44`) appears in `GET /ear`.

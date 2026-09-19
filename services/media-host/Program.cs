@@ -43,6 +43,7 @@ AzureTts? tts = string.IsNullOrWhiteSpace(speechKey) ? null : new AzureTts(speec
 AzureStt? stt = string.IsNullOrWhiteSpace(speechKey) ? null : new AzureStt(speechKey, speechRegion);
 
 var registry = new CallRegistry();
+var ear = new EarHub();
 var runtime = new HostedMediaRuntime(log, stt, tts);
 _ = Task.Run(() =>
 {
@@ -105,7 +106,8 @@ app.MapGet("/health", () =>
         stt = stt is not null,
         publicBase = callback,
         publicLoopback,
-        path = "B-accessMedia",
+        path = "C-companion-ear",
+        ear = stt is not null,
         callback,
         serviceFqdn = runtime.ServiceFqdn,
         publicIp = runtime.PublicIp,
@@ -214,6 +216,54 @@ app.MapPost("/cancel", (SessionBody body) => StopPrompt(body.SessionId, body.Utt
 app.MapPost("/barge-in", (SessionBody body) => StopPrompt(body.SessionId, null));
 app.MapPost("/mute", (SessionBody body) => StopPrompt(body.SessionId, null));
 
+app.MapPost("/ear", async (EarPost body) =>
+{
+    if (string.IsNullOrWhiteSpace(body.SessionId))
+    {
+        return Results.Json(new { error = "sessionId required" }, statusCode: 400);
+    }
+    ear.Touch(body.SessionId);
+    string? text = null;
+    if (!string.IsNullOrEmpty(body.WavBase64) && stt is not null)
+    {
+        try
+        {
+            var wav = Convert.FromBase64String(body.WavBase64);
+            text = await stt.RecognizeWavAsync(wav);
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                ear.AddCue(body.SessionId, text);
+                await NotifyOrchestrator(body.SessionId, "", "transcript", new[]
+                {
+                    new { text, speaker = "Speaker 1", tMs = 0, isPartial = false },
+                });
+            }
+        }
+        catch (FormatException)
+        {
+            return Results.Json(new { error = "wavBase64 invalid" }, statusCode: 400);
+        }
+    }
+    var snap = ear.Snapshot(body.SessionId);
+    return Results.Json(new { canHear = snap.CanHear, text, lastText = snap.LastText });
+});
+
+app.MapGet("/ear", (string sessionId) =>
+{
+    if (string.IsNullOrWhiteSpace(sessionId))
+    {
+        return Results.Json(new { error = "sessionId required" }, statusCode: 400);
+    }
+    var snap = ear.Snapshot(sessionId);
+    return Results.Json(new
+    {
+        canHear = snap.CanHear,
+        lastText = snap.LastText,
+        lastSeenUtc = snap.LastSeenUtc,
+        cues = snap.Cues.Select(c => new { t = c.Utc, c.Text }),
+    });
+});
+
 app.MapPost("/leave", async (SessionBody body) =>
 {
     var started = DateTime.UtcNow;
@@ -311,6 +361,8 @@ static void LoadDotEnv(string path)
         /* optional */
     }
 }
+
+public sealed record EarPost(string SessionId, string? WavBase64 = null);
 
 public sealed record AdmitRequest(
     string SessionId,
