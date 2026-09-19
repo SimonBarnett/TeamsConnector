@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="..\media-worker\*Tests.cs" Link="%(Filename)%(Extension)" />
     <Compile Include="..\media-host\EarHub.cs" Link="EarHub.cs" />
+    <Compile Include="..\media-worker\PhraseCanon.cs" Link="PhraseCanon.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />

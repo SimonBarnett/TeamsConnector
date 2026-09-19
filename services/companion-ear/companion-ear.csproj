@@ -14,5 +14,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\media-worker\PcmWav.cs" Link="PcmWav.cs" />
+    <Compile Include="..\media-worker\PhraseCanon.cs" Link="PhraseCanon.cs" />
   </ItemGroup>
 </Project>

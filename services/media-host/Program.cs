@@ -229,7 +229,11 @@ app.MapPost("/ear", async (EarPost body) =>
         try
         {
             var wav = Convert.FromBase64String(body.WavBase64);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             text = await stt.RecognizeWavAsync(wav);
+            sw.Stop();
+            GraphCallFileLog.Line(
+                $"ear session={body.SessionId} wavBytes={wav.Length} sttMs={stt.LastMs} sdkMs={stt.LastSdkMs} restMs={stt.LastRestMs} path={stt.LastPath} handlerMs={sw.ElapsedMilliseconds} text={text ?? "-"}");
             if (!string.IsNullOrWhiteSpace(text))
             {
                 ear.AddCue(body.SessionId, text);
@@ -245,7 +249,15 @@ app.MapPost("/ear", async (EarPost body) =>
         }
     }
     var snap = ear.Snapshot(body.SessionId);
-    return Results.Json(new { canHear = snap.CanHear, text, lastText = snap.LastText });
+    return Results.Json(new
+    {
+        canHear = snap.CanHear,
+        text,
+        lastText = snap.LastText,
+        sttMs = stt?.LastMs,
+        sttPath = stt?.LastPath,
+        wavBytes = body.WavBase64?.Length,
+    });
 });
 
 app.MapGet("/ear", (string sessionId) =>

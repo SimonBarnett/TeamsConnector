@@ -15,6 +15,7 @@
     <PackageReference Include="Microsoft.Graph.Communications.Calls.Media" Version="1.2.0.17950" />
     <PackageReference Include="Microsoft.Skype.Bots.Media" Version="1.31.0.225-preview" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.83.1" />
+    <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.43.0" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\media-worker\AudioRingBuffer.cs" Link="Shared\AudioRingBuffer.cs" />
@@ -24,6 +25,7 @@
     <Compile Include="..\media-worker\GraphJoin.cs" Link="Shared\GraphJoin.cs" />
     <Compile Include="..\media-worker\LiveHearPump.cs" Link="Shared\LiveHearPump.cs" />
     <Compile Include="..\media-worker\PcmWav.cs" Link="Shared\PcmWav.cs" />
+    <Compile Include="..\media-worker\PhraseCanon.cs" Link="Shared\PhraseCanon.cs" />
     <Compile Include="..\media-worker\PublicBase.cs" Link="Shared\PublicBase.cs" />
     <Compile Include="..\media-worker\TtsPcmPlayer.cs" Link="Shared\TtsPcmPlayer.cs" />
   </ItemGroup>

@@ -16,12 +16,23 @@ public sealed class EarHub
 
     public void AddCue(string sessionId, string text)
     {
+        text = TeamsAudioJoin.MediaWorker.PhraseCanon.MaybeBar(text);
         var s = _bySession.GetOrAdd(sessionId, _ => new State());
         lock (s)
         {
             s.LastSeenUtc = DateTime.UtcNow;
-            s.LastText = text;
-            s.Cues.Add(new EarCue(DateTime.UtcNow, text));
+            if (s.Cues.Count > 0 && DateTime.UtcNow - s.Cues[^1].Utc < TimeSpan.FromSeconds(2.5))
+            {
+                var prev = s.Cues[^1];
+                var joined = TeamsAudioJoin.MediaWorker.PhraseCanon.MaybeBar(JoinUtterance(prev.Text, text));
+                s.Cues[^1] = new EarCue(prev.Utc, joined);
+                s.LastText = joined;
+            }
+            else
+            {
+                s.LastText = text;
+                s.Cues.Add(new EarCue(DateTime.UtcNow, text));
+            }
             if (s.Cues.Count > 50) s.Cues.RemoveRange(0, s.Cues.Count - 50);
         }
     }
@@ -37,6 +48,16 @@ public sealed class EarHub
             var live = DateTime.UtcNow - s.LastSeenUtc < HeartbeatTtl;
             return new EarSnapshot(live, s.LastText, s.Cues.ToArray(), s.LastSeenUtc);
         }
+    }
+
+    private static string JoinUtterance(string a, string b)
+    {
+        a = a.Trim();
+        b = b.Trim();
+        if (a.EndsWith('.')) a = a[..^1];
+        if (b.Length == 1) b = char.ToLowerInvariant(b[0]).ToString();
+        else if (b.Length > 1) b = char.ToLowerInvariant(b[0]) + b[1..];
+        return a + " " + b;
     }
 
     private sealed class State
