@@ -17,6 +17,8 @@ services/media-worker.tests/bin/
 services/media-worker.tests/obj/
 services/media-host/bin/
 services/media-host/obj/
+services/companion-ear/bin/
+services/companion-ear/obj/
 .DS_Store
 Thumbs.db
 *.pem
