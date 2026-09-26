@@ -2,7 +2,7 @@
 
 MCP connector that lets a Grok Bot agent join a Microsoft Teams meeting as **notes-only by default** (Track A official transcripts), optionally speak via Path A Graph `playPrompt`, and return grounded notes.
 
-This repository implements build spec v1.2 plus OpenAPI 1.5.0 at `contracts/teams_audio_join.openapi.json`.
+This repository implements build spec v1.2 plus OpenAPI 1.5.0 at `contracts/teams_audio_join.openapi.json` (canonical; do not re-add a root duplicate).
 
 **Default `join_meeting` mode is `listen` (Track A transcripts, `plane=auto` → transcript). `listen_speak` is explicit. Fixture/loopback `speak()` returns `played_locally` with `audibleInTeams: false` — Teams attendees do not hear it. `get_meeting_status.participants` can be empty mid-call (attendance reports land after the meeting).**
 
