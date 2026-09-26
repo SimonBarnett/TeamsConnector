@@ -36,6 +36,8 @@ docs/admin-install.md
 docs/workflows.md
 docs/ops.md
 docs/spike-track-b.md  Path A decision + tenant spike table
+docs/feature-request-teams-audio-join-v1-2026-09-26.md  FR #1 MUST lock
+docs/build-and-test-plan.md
 reviews/               peer-review PDFs
 packages/workflows     Calendar trigger + Hours draft events
 ```
