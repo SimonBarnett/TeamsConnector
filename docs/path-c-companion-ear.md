@@ -32,10 +32,10 @@ The bot never terminates Teams RTP. Microsoft’s media cloud is unused for hear
 2. Capture **loopback** (WASAPI render / “Stereo Mix” / VB-Cable if needed). Prefer the Teams meeting output device, not the mic.
 3. Chunk 16 kHz mono PCM (or WAV/WebM) to the worker: `POST /ear` with `MEDIA_WORKER_SECRET`.
 4. Worker runs existing **Azure STT** (`AzureStt` already on media-host; Node can call Speech too).
-5. Cues land on the same session as Path A join (`canHear=true` when the companion is connected and STT returns text).
+5. Cues land on the same session as Path A join. **`canHear=true` only when the companion is heartbeating and at least one STT cue exists** (heartbeat alone stays deaf — MRB #2).
 6. Speak stays **Path A** `playPrompt`. Do not mix Path B PCM send.
 
-`plane=auto` stays **off** until a human phrase is in STT from the companion (same bar as before: e.g. `mirror-44`).
+`plane=auto` stays **off** until a human phrase is in STT from the companion (same bar as before: e.g. `mirror-44`). Path C is **opt-in**, not the product-default hear path.
 
 ## Out of scope
 
@@ -48,8 +48,8 @@ The bot never terminates Teams RTP. Microsoft’s media cloud is unused for hear
 ## Built
 
 - `services/companion-ear` — WASAPI loopback console (`NAudio`), 16 kHz mono WAV → `POST /ear`
-- media-host `POST /ear` + `GET /ear?sessionId=` (`EarHub`: heartbeat 15s → `canHear`)
-- Fixture: `EarHubTests` companion off → `canHear=false`; cue → stored
+- media-host `POST /ear` + `GET /ear?sessionId=` (`EarHub`: heartbeat 15s + cue → `canHear`)
+- Fixture: `EarHubTests` companion off → false; heartbeat alone → false; cue → `canHear=true`
 
 IONOS: publish media-host (adds `/ear`; ARR already proxies all paths). Copy `companion-ear.exe` to the PC in the meeting. `Bob-TeamsMediaHost` can stay; Path B join is unused.
 

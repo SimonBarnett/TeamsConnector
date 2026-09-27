@@ -15,7 +15,18 @@ public class EarHubTests
     }
 
     [Fact]
-    public void Heartbeat_CanHearTrue_CueStored()
+    public void HeartbeatAlone_CanHearFalse()
+    {
+        // MRB FAIL #2: silent companion (heartbeat, no cues) must stay deaf.
+        var ear = new EarHub();
+        ear.Touch("ses_x");
+        var snap = ear.Snapshot("ses_x");
+        Assert.False(snap.CanHear);
+        Assert.Null(snap.LastText);
+    }
+
+    [Fact]
+    public void Heartbeat_WithCue_CanHearTrue()
     {
         var ear = new EarHub();
         ear.Touch("ses_x");
