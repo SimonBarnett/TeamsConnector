@@ -41,12 +41,16 @@ public sealed class EarHub
     {
         if (!_bySession.TryGetValue(sessionId, out var s))
         {
-            return new EarSnapshot(false, null, Array.Empty<EarCue>(), null);
+            return new EarSnapshot(false, null, Array.Empty<EarCue>() , null);
         }
         lock (s)
         {
-            var live = DateTime.UtcNow - s.LastSeenUtc < HeartbeatTtl;
-            return new EarSnapshot(live, s.LastText, s.Cues.ToArray(), s.LastSeenUtc);
+            // Honest deaf-state (FR #2 / MRB): heartbeat alone must NOT flip canHear.
+            // Companion is "live" only when still heartbeating AND at least one cue exists.
+            var heartbeating = DateTime.UtcNow - s.LastSeenUtc < HeartbeatTtl;
+            var hasCue = !string.IsNullOrWhiteSpace(s.LastText) || s.Cues.Count > 0;
+            var canHear = heartbeating && hasCue;
+            return new EarSnapshot(canHear, s.LastText, s.Cues.ToArray(), s.LastSeenUtc);
         }
     }
 
